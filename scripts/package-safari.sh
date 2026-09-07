@@ -29,6 +29,7 @@ xcodebuild -project "$project_root/$app_name/$app_name.xcodeproj" \
   -scheme "$app_name" -configuration Release \
   -derivedDataPath "$PWD/.safari/DerivedData" \
   -destination "generic/platform=macOS" \
+  CURRENT_PROJECT_VERSION="${SAFARI_BUILD_NUMBER:-1}" \
   MACOSX_DEPLOYMENT_TARGET="${SAFARI_MACOS_TARGET:-14.0}" "${signing[@]}" build
 app_path="$PWD/.safari/DerivedData/Build/Products/Release/$app_name.app"
 if [[ -n "${SAFARI_TEAM_ID:-}" ]]; then

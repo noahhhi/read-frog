@@ -3,6 +3,11 @@ import { browser, storage } from "#imports"
 import { env } from "@/env"
 import { GOOGLE_DRIVE_TOKEN_STORAGE_KEY } from "../constants/config"
 import { logger } from "../logger"
+import {
+  DEFAULT_SAFARI_GOOGLE_REDIRECT_URL,
+  isOAuthRedirect,
+  launchSafariWebAuthFlow,
+} from "./safari-auth"
 
 const GOOGLE_CLIENT_ID = env.WXT_GOOGLE_CLIENT_ID ?? "YOUR_CLIENT_ID"
 const GOOGLE_SCOPES = [
@@ -57,22 +62,27 @@ async function getTokenFromStorage(): Promise<GoogleAuthToken | null> {
  */
 export async function authenticateGoogleDriveAndSaveTokenToStorage(): Promise<string> {
   try {
-    if (!browser.identity?.getRedirectURL || !browser.identity?.launchWebAuthFlow) {
-      throw new Error(
-        "Google Drive sign-in is unavailable in Safari. Use local file backup instead.",
-      )
+    const isSafari = import.meta.env.BROWSER === "safari"
+    if (!isSafari && (!browser.identity?.getRedirectURL || !browser.identity?.launchWebAuthFlow)) {
+      throw new Error("Google Drive sign-in is not supported by this browser build.")
     }
+    if (GOOGLE_CLIENT_ID === "YOUR_CLIENT_ID")
+      throw new Error("This build needs WXT_GOOGLE_CLIENT_ID to sign in to Google Drive.")
+    const redirectURL = isSafari
+      ? (env.WXT_GOOGLE_REDIRECT_URL ?? DEFAULT_SAFARI_GOOGLE_REDIRECT_URL)
+      : browser.identity.getRedirectURL()
+    const state = crypto.randomUUID()
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth")
     authUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID)
     authUrl.searchParams.set("response_type", "token")
-    authUrl.searchParams.set("redirect_uri", browser.identity.getRedirectURL())
+    authUrl.searchParams.set("redirect_uri", redirectURL)
     authUrl.searchParams.set("scope", GOOGLE_SCOPES.join(" "))
     authUrl.searchParams.set("prompt", "select_account")
+    authUrl.searchParams.set("state", state)
 
-    const responseUrl = await browser.identity.launchWebAuthFlow({
-      url: authUrl.toString(),
-      interactive: true,
-    })
+    const responseUrl = isSafari
+      ? await launchSafariWebAuthFlow(authUrl.toString(), redirectURL)
+      : await browser.identity.launchWebAuthFlow({ url: authUrl.toString(), interactive: true })
 
     if (!responseUrl) {
       throw new Error("No response URL from Google OAuth")
@@ -80,14 +90,24 @@ export async function authenticateGoogleDriveAndSaveTokenToStorage(): Promise<st
 
     const url = new URL(responseUrl)
     const params = new URLSearchParams(url.hash.slice(1))
+    if (
+      !isOAuthRedirect(responseUrl, redirectURL) ||
+      params.getAll("state").length !== 1 ||
+      params.get("state") !== state
+    ) {
+      throw new Error("Google sign-in response did not match this login attempt")
+    }
+    if (params.has("error")) throw new Error("Google sign-in was cancelled or denied")
     const accessToken = params.get("access_token")
     const expiresIn = params.get("expires_in")
 
-    if (!accessToken) {
+    if (!accessToken || params.getAll("access_token").length !== 1) {
       throw new Error("No access token in OAuth response")
     }
 
-    const expiresAt = Date.now() + (expiresIn ? Number.parseInt(expiresIn, 10) * 1000 : 3600 * 1000)
+    const lifetime = expiresIn === null ? 3600 : Number(expiresIn)
+    if (!Number.isFinite(lifetime) || lifetime <= 0) throw new Error("Invalid Google token expiry")
+    const expiresAt = Date.now() + lifetime * 1000
 
     const tokenData: GoogleAuthToken = {
       access_token: accessToken,

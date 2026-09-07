@@ -111,6 +111,7 @@ export function createExtensionClientEnvSchema(isProd: boolean, skipRequiredProd
       .string()
       .transform((value, ctx) => parseCommaSeparatedEntries(value, ctx, strictCookieDomainSchema)),
     WXT_GOOGLE_CLIENT_ID: requiresProductionEnv ? z.string().min(1) : optionalNonEmptyStringSchema,
+    WXT_GOOGLE_REDIRECT_URL: z.url().optional(),
     WXT_POSTHOG_HOST: requiresProductionEnv ? strictUrlSchema : optionalStrictUrlSchema,
     WXT_POSTHOG_API_KEY: requiresProductionEnv ? z.string().min(1) : optionalNonEmptyStringSchema,
     WXT_POSTHOG_TEST_UUID: optionalNonEmptyStringSchema,

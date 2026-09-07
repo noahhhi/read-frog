@@ -18,12 +18,17 @@ import { i18n } from "@/utils/i18n"
 import { logger } from "@/utils/logger"
 import { sendMessage } from "@/utils/message"
 import { splitTextByUtf8Bytes } from "@/utils/server/edge-tts/chunk"
+import { WebAudioPlaybackController } from "@/utils/tts-playback/web-audio-controller"
+
+const safariPlayback =
+  import.meta.env.BROWSER === "safari" ? new WebAudioPlaybackController() : null
 
 interface PlayAudioParams {
   text: string
   ttsConfig: TTSConfig
   analyticsContext: FeatureUsageContext & FeatureProviderAnalytics
   forcedVoice?: string
+  playbackReady?: Promise<void>
 }
 
 interface SynthesizedAudioChunk {
@@ -145,7 +150,8 @@ export function useTextToSpeech(surface: AnalyticsSurface = ANALYTICS_SURFACE.SE
     const activeRequestId = activeRequestIdRef.current
     activeRequestIdRef.current = null
     if (activeRequestId) {
-      void sendMessage("ttsPlaybackStop", { requestId: activeRequestId }).catch(() => {})
+      if (safariPlayback) safariPlayback.stop({ requestId: activeRequestId })
+      else void sendMessage("ttsPlaybackStop", { requestId: activeRequestId }).catch(() => {})
     }
 
     setIsPlaying(false)
@@ -157,7 +163,7 @@ export function useTextToSpeech(surface: AnalyticsSurface = ANALYTICS_SURFACE.SE
     meta: {
       suppressToast: true,
     },
-    mutationFn: async ({ text, ttsConfig, analyticsContext, forcedVoice }) => {
+    mutationFn: async ({ text, ttsConfig, analyticsContext, forcedVoice, playbackReady }) => {
       stop()
       shouldStopRef.current = false
 
@@ -176,7 +182,8 @@ export function useTextToSpeech(surface: AnalyticsSurface = ANALYTICS_SURFACE.SE
       }
       const chunks = splitTextByUtf8Bytes(text)
       setTotalChunks(chunks.length)
-      await sendMessage("ttsPlaybackPrepare")
+      if (safariPlayback) await playbackReady
+      else await sendMessage("ttsPlaybackPrepare")
 
       const fetchChunkAudio = async (chunk: string) => {
         logger.info("[TextToSpeech] Fetching chunk audio", {
@@ -209,11 +216,14 @@ export function useTextToSpeech(surface: AnalyticsSurface = ANALYTICS_SURFACE.SE
       const playChunk = async (audioChunk: SynthesizedAudioChunk): Promise<boolean> => {
         setIsPlaying(true)
         try {
-          const playbackResult = await sendMessage("ttsPlaybackStart", {
+          const playbackRequest = {
             requestId,
             audioBase64: audioChunk.audioBase64,
             contentType: audioChunk.contentType,
-          })
+          }
+          const playbackResult = safariPlayback
+            ? await safariPlayback.play(playbackRequest)
+            : await sendMessage("ttsPlaybackStart", playbackRequest)
           if (playbackResult.ok) {
             didStartPlayback = true
           }
@@ -280,9 +290,13 @@ export function useTextToSpeech(surface: AnalyticsSurface = ANALYTICS_SURFACE.SE
   })
 
   const play = (text: string, ttsConfig: TTSConfig, options?: { forcedVoice?: string }) => {
+    // Keep resume() synchronous with the user's gesture; mutationFn runs later.
+    const playbackReady = safariPlayback?.prepare()
+    void playbackReady?.catch(() => {})
     return playMutation.mutateAsync({
       text,
       ttsConfig,
+      playbackReady,
       forcedVoice: options?.forcedVoice,
       analyticsContext: {
         ...createFeatureUsageContext(ANALYTICS_FEATURE.TEXT_TO_SPEECH, surface),
