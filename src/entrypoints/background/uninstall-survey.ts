@@ -52,6 +52,7 @@ function getUILang(): string {
 }
 
 export async function setupUninstallSurvey() {
+  if (!browser.runtime.setUninstallURL) return
   const surveyUrl = i18n.t("uninstallSurveyUrl")
   const browserType = import.meta.env.BROWSER
 

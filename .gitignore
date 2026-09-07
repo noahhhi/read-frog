@@ -47,3 +47,8 @@ scripts/output/
 
 reference/
 .gstack/
+
+# Generated Xcode projects, signing state and local validation evidence
+.safari/
+.local/
+__pycache__/

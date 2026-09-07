@@ -48,10 +48,10 @@ export default defineConfig({
       "alarms",
       "cookies",
       "contextMenus",
-      "identity",
+      ...(browser !== "safari" ? ["identity"] : []),
       "scripting",
       "webNavigation",
-      ...(browser !== "firefox" ? ["offscreen", "sidePanel"] : []),
+      ...(["chrome", "edge"].includes(browser) ? ["offscreen", "sidePanel"] : []),
     ],
     host_permissions: [
       "*://*/*", // Required for scripting.executeScript in any frame
@@ -88,6 +88,16 @@ export default defineConfig({
     excludeSources: ["docs/**/*", "assets/**/*", "repos/**/*", "readmes/**/*"],
   },
   hooks: {
+    "build:manifestGenerated": (wxt, manifest) => {
+      if (wxt.config.browser !== "safari") return
+      delete manifest.side_panel
+      manifest.permissions = manifest.permissions?.filter(
+        (permission) => permission !== "sidePanel",
+      )
+      // Safari supports a nonpersistent background page in MV3. Keeping a DOM
+      // also lets the existing audio adapter work without Chrome's offscreen API.
+      manifest.background = { scripts: ["background.js"], type: "module", persistent: false }
+    },
     "vite:build:extendConfig": (entrypoints, viteConfig) => {
       const entrypoint = entrypoints.length === 1 ? entrypoints[0] : undefined
       if (entrypoint?.type !== "content-script") return
