@@ -2,6 +2,7 @@ import type { ProxyResponse } from "@/types/proxy-fetch"
 import { AUTH_COOKIE_PATTERNS } from "@read-frog/definitions"
 import { browser, storage } from "#imports"
 import { env } from "@/env"
+import { safariApiFetch } from "@/utils/auth/safari-api-fetch"
 import { AUTH_CACHE_GROUP_KEY, DEFAULT_PROXY_CACHE_TTL_MS } from "@/utils/constants/proxy-fetch"
 import { logger } from "@/utils/logger"
 import { onMessage } from "@/utils/message"
@@ -170,7 +171,7 @@ export function proxyFetch() {
       await invalidateCache(cacheGroupKey)
     }
 
-    const response = await fetch(url, {
+    const response = await safariApiFetch(url, {
       method: finalMethod,
       headers: headers ? new Headers(headers) : undefined,
       body,

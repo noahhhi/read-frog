@@ -45,7 +45,9 @@ export const authClient = createAuthClient({
   fetchOptions: {
     credentials: "include",
     customFetchImpl: createCustomFetch({
-      enabled: true,
+      // Safari website and extension contexts do not reliably share cookie
+      // change events. Refetch the real session when returning from sign-in.
+      enabled: import.meta.env.BROWSER !== "safari",
       groupKey: AUTH_CACHE_GROUP_KEY,
     }),
   },
