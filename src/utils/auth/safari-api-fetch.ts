@@ -1,4 +1,4 @@
-import { AUTH_BASE_PATH, AUTH_COOKIE_PATTERNS, ORPC_PREFIX } from "@read-frog/definitions"
+import { AUTH_BASE_PATH, ORPC_PREFIX } from "@read-frog/definitions"
 import { browser } from "#imports"
 import { env } from "@/env"
 
@@ -35,56 +35,16 @@ function isOfficialTab(url: string | undefined): boolean {
   }
 }
 
-let openingTab: Promise<number | undefined> | undefined
-
 async function findAccountTab(): Promise<number | undefined> {
   const tabs = await browser.tabs.query({})
   const official = tabs.filter(
     (tab) => tab.incognito === browser.extension.inIncognitoContext && isOfficialTab(tab.url),
   )
   const existing = official.find((tab) => tab.active) ?? official[0]
-  if (existing?.id !== undefined) return existing.id
-
-  // Guests do not need an extra tab. After sign-in, Safari needs a first-party
-  // website context: extension fetch omits even readable SameSite=Lax cookies.
-  const cookies = await browser.cookies.getAll({ url: env.WXT_API_URL })
-  if (!cookies.some((cookie) => AUTH_COOKIE_PATTERNS.some((name) => cookie.name.includes(name)))) {
-    return undefined
-  }
-
-  openingTab ??= (async () => {
-    const tab = await browser.tabs.create({ url: `${env.WXT_WEBSITE_URL}/home`, active: false })
-    if (tab.id === undefined) throw new Error("Could not open the account website")
-    const tabId = tab.id
-    await new Promise<void>((resolve, reject) => {
-      const finish = (error?: Error) => {
-        clearTimeout(timeout)
-        browser.tabs.onUpdated.removeListener(onUpdated)
-        browser.tabs.onRemoved.removeListener(onRemoved)
-        if (error) reject(error)
-        else resolve()
-      }
-      const onUpdated: Parameters<typeof browser.tabs.onUpdated.addListener>[0] = (id, change) => {
-        if (id === tabId && change.status === "complete") finish()
-      }
-      const onRemoved = (id: number) => {
-        if (id === tabId) finish(new Error("The account website was closed"))
-      }
-      const timeout = setTimeout(() => finish(new Error("The account website timed out")), 20_000)
-      browser.tabs.onUpdated.addListener(onUpdated)
-      browser.tabs.onRemoved.addListener(onRemoved)
-      void browser.tabs.get(tabId).then(
-        (current) => {
-          if (current.status === "complete") finish()
-        },
-        () => finish(new Error("The account website was closed")),
-      )
-    })
-    return tabId
-  })().finally(() => {
-    openingTab = undefined
-  })
-  return openingTab
+  // Account reads also run when content scripts mount on ordinary websites.
+  // Only explicit navigation (Log in / Web App) may open the official website;
+  // a background request must never reopen a tab the user closed.
+  return existing?.id
 }
 
 /**

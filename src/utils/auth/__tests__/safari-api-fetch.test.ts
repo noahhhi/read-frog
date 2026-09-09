@@ -136,6 +136,44 @@ describe("Safari authenticated API transport", () => {
     expect(await response.text()).toBe("original-body")
   })
 
+  it("never opens the homepage for concurrent background reads, even with a login cookie", async () => {
+    mocks.browser.tabs.query.mockResolvedValue([])
+    mocks.browser.cookies.getAll.mockResolvedValue([
+      { name: "better-auth.session_token", value: "test-session" },
+    ])
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        safariApiFetch(
+          index % 2 ? sessionURL : "https://api.readfrog.app/api/rpc/hostedAi/status",
+          options,
+        ),
+      ),
+    )
+    expect(fetch).toHaveBeenCalledTimes(12)
+    expect(mocks.browser.tabs.create).not.toHaveBeenCalled()
+    expect(mocks.browser.scripting.executeScript).not.toHaveBeenCalled()
+  })
+
+  it("uses a manually opened Chinese homepage and does not reopen it after closure", async () => {
+    mocks.browser.tabs.query.mockResolvedValue([
+      { id: 5, url: "https://www.readfrog.app/zh/home", incognito: false, active: true },
+    ])
+    const { result } = await startRequest()
+    headers()
+    mocks.onMessage.emit({ type: "chunk", bytes: Array.from(new TextEncoder().encode("{}")) })
+    mocks.onMessage.emit({ type: "end" })
+    expect(await (await result).json()).toEqual({})
+
+    mocks.browser.tabs.query.mockResolvedValue([])
+    mocks.browser.cookies.getAll.mockResolvedValue([
+      { name: "better-auth.session_token", value: "test-session" },
+    ])
+    await safariApiFetch(sessionURL, options)
+    expect(mocks.browser.tabs.create).not.toHaveBeenCalled()
+    expect(mocks.browser.scripting.executeScript).toHaveBeenCalledOnce()
+    expect(fetch).toHaveBeenCalledOnce()
+  })
+
   it("forwards request bytes and yields stream chunks before completion", async () => {
     const { result } = await startRequest({ ...options, method: "POST", body: "你好" })
     const injection = mocks.browser.scripting.executeScript.mock.calls[0]![0]
