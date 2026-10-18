@@ -2361,8 +2361,15 @@
   },
   {
     "id": "bugsKde",
+    "description": "Translate Bugzilla descriptions and comments rendered as pre.bz_comment_text, while leaving other preformatted blocks excluded",
     "matches": "bugs.kde.org",
-    "excludeSelectors.add": [".bz_first_comment_head", ".bz_comment_head", ".related_actions"]
+    "dontWalkTags.remove": ["PRE"],
+    "excludeSelectors.add": [
+      ".bz_first_comment_head",
+      ".bz_comment_head",
+      ".related_actions",
+      "pre:not(.bz_comment_text)"
+    ]
   },
   {
     "id": "plati",
