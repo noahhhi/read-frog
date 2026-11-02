@@ -22,6 +22,7 @@ import {
   selectAllRemoteAtom,
   unresolvedConfigsAtom,
 } from "@/utils/atoms/google-drive-sync"
+import { GoogleAccountChangedError } from "@/utils/google-drive/auth"
 import { syncMergedConfig } from "@/utils/google-drive/sync"
 import { i18n } from "@/utils/i18n"
 import { logger } from "@/utils/logger"
@@ -73,6 +74,14 @@ function DialogContent({ onResolved, onCancelled }: DialogContentProps) {
       onResolved()
     } catch (error) {
       logger.error("Failed to sync merged config", error)
+      // Worth naming: "sync failed, try again" would send the user round the
+      // same loop, when what they need to know is which account they are on.
+      if (error instanceof GoogleAccountChangedError) {
+        toastManager.add({
+          type: "error",
+          title: i18n.t("options.preference.config.googleDrive.accountChangedError"),
+        })
+      }
       onCancelled()
     } finally {
       setIsConfirming(false)
@@ -90,7 +99,7 @@ function DialogContent({ onResolved, onCancelled }: DialogContentProps) {
     <AlertDialogContent className="flex max-h-[90vh] flex-col overflow-hidden data-[size=default]:max-w-[calc(100vw-2rem)] data-[size=default]:md:max-w-2xl data-[size=default]:lg:max-w-4xl data-[size=default]:xl:max-w-5xl">
       <AlertDialogHeader>
         <AlertDialogTitle className="flex items-center gap-2">
-          <Icon icon="mdi:alert" className="size-5 text-yellow-500" />
+          <Icon icon="mdi:alert" className="size-5 text-warning" />
           {i18n.t("options.preference.config.googleDrive.unresolved.title")}
         </AlertDialogTitle>
         <AlertDialogDescription>
@@ -103,12 +112,12 @@ function DialogContent({ onResolved, onCancelled }: DialogContentProps) {
         <div className="flex items-center gap-4 text-xs">
           {status.allResolved ? (
             !status.isValid ? (
-              <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+              <span className="flex items-center gap-1 text-destructive">
                 <Icon icon="tabler:alert-circle-filled" className="size-4" />
                 {i18n.t("options.preference.config.googleDrive.unresolved.configInvalid")}
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+              <span className="flex items-center gap-1 text-success">
                 <Icon icon="tabler:circle-check-filled" className="size-4" />
                 {i18n.t("options.preference.config.googleDrive.unresolved.configValid")}
               </span>
@@ -192,9 +201,13 @@ function DialogContent({ onResolved, onCancelled }: DialogContentProps) {
             void handleConfirm()
           }}
         >
-          {isConfirming
-            ? i18n.t("options.preference.config.googleDrive.syncing")
-            : i18n.t("options.preference.config.googleDrive.unresolved.confirm")}
+          {isConfirming ? (
+            <span className="shimmer">
+              {i18n.t("options.preference.config.googleDrive.syncing")}
+            </span>
+          ) : (
+            i18n.t("options.preference.config.googleDrive.unresolved.confirm")
+          )}
         </AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>

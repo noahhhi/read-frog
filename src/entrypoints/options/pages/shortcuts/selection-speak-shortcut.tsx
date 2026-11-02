@@ -1,0 +1,34 @@
+import { useAtom } from "jotai"
+import { configFieldsAtomMap } from "@/utils/atoms/config"
+import { getSpeakShortcut } from "@/utils/constants/selection"
+import { i18n } from "@/utils/i18n"
+import { buildSectionLink } from "../../command-palette/section-scroll"
+import { ShortcutConfigItem } from "./shortcut-config-item"
+
+export function SelectionSpeakShortcut() {
+  const [selectionToolbar, setSelectionToolbar] = useAtom(configFieldsAtomMap.selectionToolbar)
+  const { speak } = selectionToolbar.features
+
+  return (
+    <ShortcutConfigItem
+      id="selection-speak-shortcut"
+      title={i18n.t("options.shortcuts.selectionSpeak.title")}
+      description={i18n.t("options.shortcuts.selectionSpeak.description")}
+      turnOn={
+        speak.enabled
+          ? undefined
+          : buildSectionLink("/selection-toolbar", "selection-toolbar-speak")
+      }
+      shortcut={getSpeakShortcut(speak)}
+      onChange={(nextShortcut) => {
+        void setSelectionToolbar((current) => ({
+          ...current,
+          features: {
+            ...current.features,
+            speak: { ...current.features.speak, shortcut: nextShortcut },
+          },
+        }))
+      }}
+    />
+  )
+}

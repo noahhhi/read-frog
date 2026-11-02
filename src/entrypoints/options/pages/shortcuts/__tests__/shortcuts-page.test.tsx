@@ -25,6 +25,18 @@ vi.mock("../selection-translation-shortcut", () => ({
   SelectionTranslationShortcut: () => <section data-section="selection-translation-shortcut" />,
 }))
 
+vi.mock("../selection-speak-shortcut", () => ({
+  SelectionSpeakShortcut: () => <section data-section="selection-speak-shortcut" />,
+}))
+
+vi.mock("../selection-annotation-shortcut", () => ({
+  SelectionAnnotationShortcut: () => <section data-section="selection-annotation-shortcut" />,
+}))
+
+vi.mock("../action-shortcuts", () => ({
+  ActionShortcuts: () => <section data-section="selection-action-shortcuts" />,
+}))
+
 vi.mock("../subtitles-toggle-shortcut", () => ({
   SubtitlesToggleShortcut: () => <section data-section="subtitles-toggle-shortcut" />,
 }))
@@ -38,7 +50,7 @@ vi.mock("../translation-hub-shortcut", () => ({
 }))
 
 describe("shortcuts page", () => {
-  it("lists every shortcut, widest scope first", () => {
+  it("lists every shortcut, widest scope first, then the AI actions", () => {
     const { container } = render(<ShortcutsPage />)
 
     const sections = [...container.querySelectorAll("[data-section]")].map((section) =>
@@ -49,9 +61,12 @@ describe("shortcuts page", () => {
       "page-translation-shortcut",
       "translation-mode-shortcut",
       "selection-translation-shortcut",
+      "selection-speak-shortcut",
+      "selection-annotation-shortcut",
       "subtitles-toggle-shortcut",
       "node-translation-hotkey",
       "translation-hub-shortcut",
+      "selection-action-shortcuts",
     ])
   })
 })

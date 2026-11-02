@@ -1,5 +1,20 @@
 import { HostedAiOutputFieldTypeSchema } from "@read-frog/api-contract"
+import { langCodeISO6393Schema } from "@read-frog/definitions"
 import { z } from "zod"
+import { isBuiltInActionId } from "@/utils/constants/custom-action"
+import { BUILT_IN_AI_PROVIDER_ID } from "@/utils/constants/provider-ids"
+import { shortcutSchema } from "./shortcut"
+
+// Upper bound (UTF-16 code units) of a custom action's HTML layout. NEVER lower
+// it: an older build that reads a config holding a longer layout fails schema
+// validation, falls back to DEFAULT_CONFIG and overwrites the synced remote
+// copy. Raising it is fine only together with a CONFIG_SCHEMA_VERSION bump, so
+// older builds refuse the newer config instead of choking on it.
+export const MAX_CUSTOM_ACTION_LAYOUT_LENGTH = 32768
+
+// Upper bound (UTF-16 code units) of each text in a custom action's sample
+// data. NEVER lower it, for the reason given above.
+export const MAX_CUSTOM_ACTION_SAMPLE_TEXT_LENGTH = 32768
 
 // The contract's field-type enum is the source of truth: these values ride the
 // wire to hostedAi.customAction unchanged. Only the enum is shared — length
@@ -11,7 +26,23 @@ export const selectionToolbarCustomActionOutputFieldSchema = z.object({
   name: z.string().trim().min(1),
   type: selectionToolbarCustomActionOutputTypeSchema,
   description: z.string(),
-  speaking: z.boolean(),
+  // Where the value comes from: the model, unless this is "selection", the
+  // text the reader selected, which then rides along with the answer (so
+  // "save to notebase" keeps it next to what the model wrote about it). A
+  // selection field is never asked of the model; it is always text. Added in
+  // v111, which older builds refuse rather than drop it and turn the field
+  // into one the model writes.
+  source: z.literal("selection").optional(),
+})
+
+// What the layout preview renders an action's result with: the text the
+// reader selected, the language the answer is written for, and each output
+// field's value by field id (an id survives a rename). Values are text, the
+// way a model answers; the layout scope converts a number field's text.
+export const selectionToolbarCustomActionSampleDataSchema = z.object({
+  selection: z.string().max(MAX_CUSTOM_ACTION_SAMPLE_TEXT_LENGTH),
+  targetCode: langCodeISO6393Schema,
+  values: z.record(z.string(), z.string().max(MAX_CUSTOM_ACTION_SAMPLE_TEXT_LENGTH)),
 })
 
 export const selectionToolbarCustomActionNotebaseMappingSchema = z.object({
@@ -33,16 +64,36 @@ export const selectionToolbarCustomActionNotebaseConnectionSchema = z.object({
   notebaseNameSnapshot: z.string().trim().min(1),
   connectedAccount: selectionToolbarCustomActionNotebaseAccountSchema,
   mappings: z.array(selectionToolbarCustomActionNotebaseMappingSchema),
+  // Output fields the reader chose not to save. A field neither mapped nor
+  // listed here is undecided, and every save reminds the reader about it.
+  skippedFieldIds: z.array(z.string().nonempty()).optional(),
 })
 
 export const selectionToolbarBuiltInActionStateSchema = z.object({
   enabled: z.boolean(),
   providerId: z.string().nonempty(),
   notebaseConnection: selectionToolbarCustomActionNotebaseConnectionSchema.optional(),
+  // Missing means the action's default key (BUILT_IN_ACTION_DEFAULT_SHORTCUTS);
+  // empty means the user cleared it.
+  shortcut: shortcutSchema.optional(),
 })
 
 export const selectionToolbarBuiltInActionsSchema = z.object({
   dictionary: selectionToolbarBuiltInActionStateSchema,
+  // `.default()` is load-bearing: a config stored before v104 still parses in
+  // UI contexts that load ahead of the background migration, instead of
+  // falling back to DEFAULT_CONFIG and writing that over the user's settings.
+  sentenceAnalysis: selectionToolbarBuiltInActionStateSchema.default(() => ({
+    enabled: true,
+    providerId: BUILT_IN_AI_PROVIDER_ID,
+  })),
+  // For the same reason as above. Off: a config stored before v105 has not
+  // been through v106 either, which turns it on and unpins it, so it must not
+  // land on the toolbar in the meantime.
+  improveWriting: selectionToolbarBuiltInActionStateSchema.default(() => ({
+    enabled: false,
+    providerId: BUILT_IN_AI_PROVIDER_ID,
+  })),
 })
 
 export const selectionToolbarCustomActionSchema = z
@@ -56,6 +107,20 @@ export const selectionToolbarCustomActionSchema = z
     prompt: z.string(),
     outputSchema: z.array(selectionToolbarCustomActionOutputFieldSchema).min(1),
     notebaseConnection: selectionToolbarCustomActionNotebaseConnectionSchema.optional(),
+    // Runs the action on the selection. Missing or empty: no key. A custom
+    // action starts with none; a built-in one reads its key from its state.
+    shortcut: shortcutSchema.optional(),
+    // HTML + Liquid template for the result. Optional, not defaulted, and never
+    // syntax-checked here: a missing or blank layout renders the default field
+    // list, and a template error must not fail the whole config parse (which
+    // would replace the user's config with DEFAULT_CONFIG).
+    layout: z.string().max(MAX_CUSTOM_ACTION_LAYOUT_LENGTH).optional(),
+    // The layout preview's sample, one value per output field. Every custom
+    // action has one (v108 gave one to those from before); a built-in action
+    // persists none, so its preview generates it. Bad sample data is dropped
+    // rather than failing the whole config parse, which would replace the
+    // user's config with DEFAULT_CONFIG; the editor then generates a new one.
+    sampleData: selectionToolbarCustomActionSampleDataSchema.optional().catch(undefined),
   })
   .superRefine((action, ctx) => {
     const nameSet = new Set<string>()
@@ -126,10 +191,10 @@ export const selectionToolbarCustomActionsSchema = z
   .superRefine((actions, ctx) => {
     const idSet = new Set<string>()
     actions.forEach((action, index) => {
-      if (action.id === "default-dictionary") {
+      if (isBuiltInActionId(action.id)) {
         ctx.addIssue({
           code: "custom",
-          message: 'Action id "default-dictionary" is reserved for the built-in Dictionary.',
+          message: `Action id "${action.id}" is reserved for a built-in action.`,
           path: [index, "id"],
         })
       }
@@ -163,6 +228,9 @@ export type SelectionToolbarCustomActionOutputType = z.infer<
 >
 export type SelectionToolbarCustomActionOutputField = z.infer<
   typeof selectionToolbarCustomActionOutputFieldSchema
+>
+export type SelectionToolbarCustomActionSampleData = z.infer<
+  typeof selectionToolbarCustomActionSampleDataSchema
 >
 export type SelectionToolbarCustomActionNotebaseMapping = z.infer<
   typeof selectionToolbarCustomActionNotebaseMappingSchema

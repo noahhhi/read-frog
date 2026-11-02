@@ -7,9 +7,9 @@ import {
   TRANSLATE_BUTTON_CLASS,
   YOUTUBE_NATIVE_SUBTITLES_CLASS,
 } from "@/utils/constants/subtitles"
+import { normalizeUrlPattern } from "@/utils/url-pattern"
 import { BUILT_IN_SITE_RULES } from "../built-in"
 import rawBuiltInRules from "../built-in/rules.json"
-import { normalizeUrlPattern } from "../match"
 import { resolveSiteRule } from "../resolve"
 
 const RAW_BUILT_IN_SITE_RULES = rawBuiltInRules as unknown as Array<Record<string, unknown>>
@@ -70,10 +70,35 @@ function allSelectors(rule: (typeof BUILT_IN_SITE_RULES)[number]): string[] {
     ...(rule.atomSelectors ?? []),
     ...(rule["atomSelectors.add"] ?? []),
     ...(rule["atomSelectors.remove"] ?? []),
+    ...(rule.walkHiddenSelectors ?? []),
+    ...(rule["walkHiddenSelectors.add"] ?? []),
+    ...(rule["walkHiddenSelectors.remove"] ?? []),
   ]
 }
 
 describe("built-in site rules", () => {
+  it.each([
+    "https://browse.library.kiwix.org/viewer",
+    "https://en.browse.library.kiwix.org/content/article",
+    "https://latentk.com/insight/progressive-git/",
+    "https://www.w3schools.com/html/html_iframe.asp",
+    "https://example.com/article",
+    "https://latentk.com/insight/unrelated/",
+    "https://www.w3schools.com/html/html_intro.asp",
+  ])("keeps iframe runtime opt-in on %s", (url) => {
+    expect(resolveSiteRule(url, BUILT_IN_SITE_RULES, [], []).injectIntoIframes).toBeNull()
+  })
+
+  it.each([
+    ["https://arxiv.org/html/2609.32423", true],
+    ["https://browse.arxiv.org/html/2310.06825", true],
+    ["https://ar5iv.labs.arxiv.org/html/2310.06825", true],
+    ["https://arxiv.org/abs/2609.32423", null],
+    ["https://example.com/article", null],
+  ])("resolves LaTeXML text box reflow on %s to %s", (url, expected) => {
+    expect(resolveSiteRule(url, BUILT_IN_SITE_RULES, [], []).reflowLatexmlTextBoxes).toBe(expected)
+  })
+
   it("resolves the inline atom defaults on any URL and folds them into preserve-text", () => {
     const resolved = resolveSiteRule("https://example.com/article", BUILT_IN_SITE_RULES, [], [])
     const atomSelectors = resolved.atomSelector?.split(",") ?? []
@@ -237,6 +262,68 @@ describe("built-in site rules", () => {
     expect(resolved.injectedCss).toContain("white-space: normal !important")
     expect(resolved.injectedCss).toContain("overflow: visible !important")
     expect(resolved.injectedCss).toContain("text-overflow: clip !important")
+  })
+
+  it("keeps Kaggle guide translations in flow while preserving card link overlays and inline atoms", () => {
+    const resolved = resolveSiteRule(
+      "https://www.kaggle.com/learn-guide/kaggle-competitions",
+      BUILT_IN_SITE_RULES,
+      [],
+      [],
+    )
+    const style = document.createElement("style")
+    // Kaggle uses empty spans to stretch a card's link over its whole surface.
+    // The same broad selector also catches our wrapper, content and spacer.
+    style.textContent = `
+      .learnGuide span {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        z-index: 1;
+      }
+      ${resolved.injectedCss}
+    `
+    const fixture = document.createElement("div")
+    fixture.className = "learnGuide"
+    fixture.innerHTML = `
+      <a href="/competitions/titanic">Titanic<span data-overlay></span></a>
+      <p>Source text<span class="read-frog-translated-content-wrapper">
+        <span data-spacer>&nbsp;&nbsp;</span>
+        <span class="read-frog-translated-inline-content">译文</span>
+        <span class="read-frog-translated-block-content">段落译文</span>
+        <span class="read-frog-inline-atom"><span data-formula>x</span></span>
+      </span></p>
+    `
+    document.head.append(style)
+    document.body.append(fixture)
+
+    try {
+      for (const selector of [
+        ".read-frog-translated-content-wrapper",
+        "[data-spacer]",
+        ".read-frog-translated-inline-content",
+        ".read-frog-translated-block-content",
+      ]) {
+        const computed = window.getComputedStyle(fixture.querySelector(selector)!)
+        expect(computed.position).toBe("static")
+        expect(computed.width).toBe("auto")
+        expect(computed.height).toBe("auto")
+        expect(computed.zIndex).toBe("auto")
+      }
+
+      for (const selector of ["[data-overlay]", ".read-frog-inline-atom", "[data-formula]"]) {
+        const computed = window.getComputedStyle(fixture.querySelector(selector)!)
+        expect(computed.position).toBe("absolute")
+        expect(computed.width).toBe("100%")
+        expect(computed.height).toBe("100%")
+        expect(computed.zIndex).toBe("1")
+      }
+    } finally {
+      fixture.remove()
+      style.remove()
+    }
   })
 
   // `linkedinFeed` shipped as `https://linkedin.com/feed/*`, but LinkedIn 301s the
@@ -564,6 +651,58 @@ describe("built-in site rules", () => {
       ["alibaba-sourcing-rfq"],
     )
     expect(disabled.dontWalkTags).toBeNull()
+  })
+
+  // A GameFAQs text guide is a text/html page whose whole body is a run of
+  // `<pre id="faqspan-N">` blocks, so the PRE block left nothing to translate
+  // but the page chrome. The plain-text exemption does not apply to text/html.
+  it("un-blocks PRE on GameFAQs guide pages only", () => {
+    for (const url of [
+      "https://gamefaqs.gamespot.com/psp/611279-shin-megami-tensei-persona-2-innocent-sin/faqs/63674",
+      "https://gamefaqs.gamespot.com/psp/611279-shin-megami-tensei-persona-2-innocent-sin/faqs/63674?page=2",
+      "https://gamefaqs.gamespot.com/ps/197340-final-fantasy-vii/faqs/80373/materia",
+    ]) {
+      const resolved = resolveSiteRule(url, BUILT_IN_SITE_RULES, [], [])
+
+      expect(resolved.matchedRuleIds).toContain("gamefaqs-guides")
+      expect(resolved.dontWalkTags).not.toBeNull()
+      expect(resolved.dontWalkTags!.has("PRE")).toBe(false)
+      expect(resolved.dontWalkTags!.has("SCRIPT")).toBe(true)
+      expect(resolved.dontWalkTagsExplicitAdds?.has("PRE") ?? false).toBe(false)
+    }
+
+    for (const url of [
+      "https://gamefaqs.gamespot.com/",
+      "https://gamefaqs.gamespot.com/psp/611279-shin-megami-tensei-persona-2-innocent-sin/faqs",
+      "https://gamefaqs.gamespot.com/boards/611279-shin-megami-tensei-persona-2-innocent-sin",
+    ]) {
+      expect(resolveSiteRule(url, BUILT_IN_SITE_RULES, [], []).dontWalkTags).toBeNull()
+    }
+
+    const disabled = resolveSiteRule(
+      "https://gamefaqs.gamespot.com/psp/611279-shin-megami-tensei-persona-2-innocent-sin/faqs/63674",
+      BUILT_IN_SITE_RULES,
+      [],
+      ["gamefaqs-guides"],
+    )
+    expect(disabled.dontWalkTags).toBeNull()
+  })
+
+  // The header dropdowns open on `li:hover`, so no mutation ever brings the
+  // walk back to them once it skipped them as display: none (Featurebase #141).
+  it("walks The North Face Korea's CSS-only header menus while hidden", () => {
+    for (const url of [
+      "https://www.thenorthfacekorea.co.kr/",
+      "https://thenorthfacekorea.co.kr/mens",
+    ]) {
+      const resolved = resolveSiteRule(url, BUILT_IN_SITE_RULES, [], [])
+
+      expect(resolved.matchedRuleIds).toContain("thenorthfacekorea")
+      expect(resolved.walkHiddenSelector).toBe(".header-gnb .twoDepth_wrap")
+    }
+
+    const elsewhere = resolveSiteRule("https://example.com/", BUILT_IN_SITE_RULES, [], [])
+    expect(elsewhere.walkHiddenSelector).toBeNull()
   })
 
   it("retains independently verified content roots that cover their full match scope", () => {

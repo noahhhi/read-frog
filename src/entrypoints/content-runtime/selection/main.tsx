@@ -1,0 +1,147 @@
+import type { ContentScriptContext } from "#imports"
+import type { ThemeMode } from "@/types/config/theme"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { kebabCase } from "case-anything"
+import { Provider as JotaiProvider } from "jotai"
+import { useHydrateAtoms } from "jotai/utils"
+import ReactDOM from "react-dom/client"
+import { createShadowRootUi } from "#imports"
+import { ThemeProvider } from "@/components/providers/theme-provider"
+import { TooltipProvider } from "@/components/ui/base-ui/tooltip"
+import { disposeAnnotationController } from "@/utils/annotate"
+import { baseThemeModeAtom } from "@/utils/atoms/theme"
+import { getLocalConfig } from "@/utils/config/storage"
+import { APP_NAME } from "@/utils/constants/app"
+import { SELECTION_UI_CSS } from "@/utils/content-ui-css"
+import { primeGlossaryMatcher } from "@/utils/glossary/active-matcher"
+import { initI18n } from "@/utils/i18n"
+import { LocaleBoundary } from "@/utils/i18n/locale-boundary"
+import { registerBundledIcons } from "@/utils/iconify/bundled-icons"
+import { ensureIconifyBackgroundFetch } from "@/utils/iconify/setup-background-fetch"
+import { ShadowWrapperContext } from "@/utils/react-shadow-host/create-shadow-host"
+import { protectSelectAllShadowRoot } from "@/utils/select-all"
+import { insertShadowRootUIWrapperInto, keepShadowHostRendered } from "@/utils/shadow-root"
+import {
+  clearEffectiveSiteControlUrl,
+  getEffectiveSiteControlUrl,
+  isSiteEnabled,
+} from "@/utils/site-control"
+import { queryClient } from "@/utils/tanstack-query"
+import { getLocalThemeMode } from "@/utils/theme"
+import App from "./app"
+import { setupExternalSelectionSource } from "./external-selection-source"
+
+function HydrateAtoms({
+  initialValues,
+  children,
+}: {
+  initialValues: [[typeof baseThemeModeAtom, ThemeMode]]
+  children: React.ReactNode
+}) {
+  useHydrateAtoms(initialValues)
+  return children
+}
+
+// eslint-disable-next-line import/no-mutable-exports
+export let shadowWrapper: HTMLElement | null = null
+
+declare global {
+  interface Window {
+    __READ_FROG_SELECTION_INJECTED__?: boolean
+  }
+}
+
+async function mountSelectionUI(ctx: ContentScriptContext) {
+  ensureIconifyBackgroundFetch()
+  registerBundledIcons()
+
+  const themeMode = await getLocalThemeMode()
+
+  const ui = await createShadowRootUi(ctx, {
+    name: `${kebabCase(APP_NAME)}-selection`,
+    position: "overlay",
+    anchor: "body",
+    css: SELECTION_UI_CSS,
+    onMount: (container, shadow, shadowHost) => {
+      const wrapper = insertShadowRootUIWrapperInto(container, shadowHost)
+      shadowWrapper = wrapper
+      protectSelectAllShadowRoot(shadowHost, wrapper)
+
+      const root = ReactDOM.createRoot(wrapper)
+      root.render(
+        <ShadowWrapperContext value={wrapper}>
+          <QueryClientProvider client={queryClient}>
+            <JotaiProvider>
+              <HydrateAtoms initialValues={[[baseThemeModeAtom, themeMode]]}>
+                <ThemeProvider container={wrapper}>
+                  <TooltipProvider>
+                    <LocaleBoundary>
+                      <App uiContainer={container} portalContainer={shadow} />
+                    </LocaleBoundary>
+                  </TooltipProvider>
+                </ThemeProvider>
+              </HydrateAtoms>
+            </JotaiProvider>
+          </QueryClientProvider>
+        </ShadowWrapperContext>,
+      )
+      return root
+    },
+    onRemove: (root) => {
+      root?.unmount()
+      shadowWrapper = null
+    },
+  })
+
+  ui.mount()
+  ctx.onInvalidated(keepShadowHostRendered(ui.shadowHost))
+}
+
+// The selection toolbar. Runs inside the shared content runtime, which the
+// loader content script imports (see entrypoints/content-runtime).
+export async function runSelectionContent(ctx: ContentScriptContext) {
+  // Prevent double injection (manifest-based + programmatic injection)
+  if (window.__READ_FROG_SELECTION_INJECTED__) return
+  window.__READ_FROG_SELECTION_INJECTED__ = true
+
+  ctx.onInvalidated(() => {
+    window.__READ_FROG_SELECTION_INJECTED__ = false
+    clearEffectiveSiteControlUrl()
+    // The glosses are this script's: the next one draws its own.
+    disposeAnnotationController()
+  })
+
+  // Check global site control
+  const config = await getLocalConfig()
+  const siteControlUrl = getEffectiveSiteControlUrl(window.location.href)
+  if (!isSiteEnabled(siteControlUrl, config)) {
+    window.__READ_FROG_SELECTION_INJECTED__ = false
+    clearEffectiveSiteControlUrl()
+    return
+  }
+
+  // Warm the glossary before any selection happens, so the translate path
+  // reads a compiled matcher instead of waiting on a message round trip.
+  // Terms are stored per target language, so the warm-up needs the configured
+  // one; a failure here costs nothing but the warm-up.
+  //
+  // Below the guards, not above them: this is the only message any content
+  // script sends at page load, and sending it on a site the user switched the
+  // extension off for — where the toolbar never mounts, so the matcher can
+  // never be read — is work they asked us not to do. `primeGlossaryMatcher`
+  // swallows its own failures, so no catch is needed here.
+  // `config?.` because `isSiteEnabled` tolerates a null config rather than
+  // narrowing it; `glossary` itself is always present once config is, since
+  // its schema carries a default.
+  if (config?.glossary.enabled) primeGlossaryMatcher(config.language.targetCode)
+
+  // Answer ebook bridge handshakes before the React UI finishes mounting
+  const cleanupExternalSelectionSource = setupExternalSelectionSource()
+  if (cleanupExternalSelectionSource) {
+    ctx.onInvalidated(cleanupExternalSelectionSource)
+  }
+
+  await initI18n(config?.uiLanguage)
+
+  void mountSelectionUI(ctx)
+}

@@ -15,6 +15,7 @@ assert.deepEqual(manifest.background, {
   persistent: false,
 })
 const resources = [
+  "content-runtime.js",
   ...manifest.background.scripts,
   manifest.action.default_popup,
   manifest.options_ui.page,

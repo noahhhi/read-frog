@@ -1,13 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SUBTITLES_SOURCE } from "@/utils/constants/subtitles"
-import { OverlaySubtitlesError, ToastSubtitlesError } from "@/utils/subtitles/errors"
+import {
+  NoSubtitlesError,
+  OverlaySubtitlesError,
+  ToastSubtitlesError,
+} from "@/utils/subtitles/errors"
 import {
   adPlayingAtom,
   currentTimeMsAtom,
   sourceTrackAtom,
+  subtitlesSidebarOpenAtom,
   subtitlesSourceAtom,
   subtitlesStore,
+  translatedTrackAtom,
 } from "../atoms"
+import { wordLookupAtom } from "../learning/atoms"
 import { TranslationCoordinator } from "../translation-coordinator"
 import { UniversalVideoAdapter } from "../universal-adapter"
 
@@ -52,6 +59,7 @@ function createAdapter(fetchResult: Array<{ text: string; start: number; end: nu
 
   const adapter = new UniversalVideoAdapter({
     config: {
+      platform: "youtube",
       selectors: {
         video: "video",
         playerContainer: ".player",
@@ -89,7 +97,9 @@ describe("universalVideoAdapter", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     subtitlesStore.set(sourceTrackAtom, [])
+    subtitlesStore.set(translatedTrackAtom, [])
     subtitlesStore.set(currentTimeMsAtom, 0)
+    subtitlesStore.set(subtitlesSidebarOpenAtom, false)
     vi.stubGlobal("document", {
       title: "Test video",
       querySelector: vi.fn<(...args: any[]) => any>(() => null),
@@ -157,6 +167,176 @@ describe("universalVideoAdapter", () => {
 
     expect(disconnect).toHaveBeenCalledTimes(1)
     expect(subtitlesStore.get(adPlayingAtom)).toBe(false)
+  })
+
+  describe("a load that overlapped an ad", () => {
+    function prepareLoads(adapter: UniversalVideoAdapter) {
+      const scheduler = attachScheduler(adapter, true)
+      ;(scheduler as any).start = vi.fn<(...args: any[]) => any>()
+      ;(scheduler as any).show = vi.fn<(...args: any[]) => any>()
+      ;(scheduler as any).hide = vi.fn<(...args: any[]) => any>()
+      vi.spyOn(adapter as any, "hideNativeSubtitles").mockImplementation(() => {})
+      vi.spyOn(adapter as any, "processTranslatedSubtitles").mockResolvedValue(undefined)
+      return scheduler
+    }
+
+    function setAdPlaying(adapter: UniversalVideoAdapter, playing: boolean) {
+      ;(adapter as any).config.isAdPlaying = () => playing
+      ;(adapter as any).observedAdPlayer = {} as HTMLElement
+      ;(adapter as any).syncAdPlayingState()
+    }
+
+    const lookupFailure = () => new OverlaySubtitlesError("subtitles.errors.fetchSubTimeout")
+
+    it("retries a load that failed during the ad once the ad ends", async () => {
+      const { adapter, subtitlesFetcher } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+      const scheduler = prepareLoads(adapter)
+      subtitlesFetcher.fetch.mockRejectedValueOnce(lookupFailure())
+      setAdPlaying(adapter, true)
+
+      await (adapter as any).switchSubtitlesFetcher(SUBTITLES_SOURCE.NATIVE)
+
+      expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(1)
+      expect(scheduler.setState).toHaveBeenCalledWith("error", {
+        message: "subtitles.errors.fetchSubTimeout",
+      })
+
+      setAdPlaying(adapter, false)
+
+      await vi.waitFor(() => expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(2))
+      await vi.waitFor(() =>
+        expect((adapter as any).processTranslatedSubtitles).toHaveBeenCalledTimes(1),
+      )
+
+      // The retry is spent: a later ad break has no failed load left to retry.
+      const laterRetry = vi.spyOn(adapter as any, "switchSubtitlesFetcher")
+      setAdPlaying(adapter, true)
+      setAdPlaying(adapter, false)
+      expect(laterRetry).not.toHaveBeenCalled()
+    })
+
+    it("retries right away when the ad ended before the load gave up", async () => {
+      const { adapter, subtitlesFetcher } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+      const scheduler = prepareLoads(adapter)
+      let failLoad: (error: unknown) => void = () => {}
+      subtitlesFetcher.fetch.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            failLoad = reject
+          }),
+      )
+      setAdPlaying(adapter, true)
+
+      const firstLoad = (adapter as any).switchSubtitlesFetcher(SUBTITLES_SOURCE.NATIVE)
+      await vi.waitFor(() => expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(1))
+      setAdPlaying(adapter, false)
+      failLoad(lookupFailure())
+      await firstLoad
+
+      await vi.waitFor(() => expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(2))
+      expect(scheduler.setState).not.toHaveBeenCalledWith("error", expect.anything())
+    })
+
+    it("does not retry once subtitles were turned off during the ad", async () => {
+      const { adapter, subtitlesFetcher } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+      const scheduler = prepareLoads(adapter)
+      subtitlesFetcher.fetch.mockRejectedValueOnce(lookupFailure())
+      setAdPlaying(adapter, true)
+
+      await (adapter as any).switchSubtitlesFetcher(SUBTITLES_SOURCE.NATIVE)
+      adapter.toggleSubtitlesManually(false)
+      scheduler.isActive.mockReturnValue(false)
+      const retry = vi.spyOn(adapter as any, "switchSubtitlesFetcher")
+      setAdPlaying(adapter, false)
+
+      expect(retry).not.toHaveBeenCalled()
+      expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(1)
+    })
+
+    it("leaves a failure that no ad overlapped alone", async () => {
+      const { adapter, subtitlesFetcher } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+      prepareLoads(adapter)
+      subtitlesFetcher.fetch.mockRejectedValueOnce(lookupFailure())
+
+      await (adapter as any).switchSubtitlesFetcher(SUBTITLES_SOURCE.NATIVE)
+      const retry = vi.spyOn(adapter as any, "switchSubtitlesFetcher")
+      setAdPlaying(adapter, true)
+      setAdPlaying(adapter, false)
+
+      expect(retry).not.toHaveBeenCalled()
+      expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(1)
+    })
+
+    // The captions loaded fine; whatever broke afterwards was not the ad's doing.
+    it("does not retry a failure after the captions loaded", async () => {
+      const { adapter, subtitlesFetcher } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+      const scheduler = prepareLoads(adapter)
+      vi.mocked((adapter as any).processTranslatedSubtitles).mockRejectedValueOnce(
+        new OverlaySubtitlesError("provider rejected"),
+      )
+      setAdPlaying(adapter, true)
+
+      await (adapter as any).switchSubtitlesFetcher(SUBTITLES_SOURCE.NATIVE)
+      const retry = vi.spyOn(adapter as any, "switchSubtitlesFetcher")
+      setAdPlaying(adapter, false)
+
+      expect(retry).not.toHaveBeenCalled()
+      expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(1)
+      expect(scheduler.setState).toHaveBeenCalledWith("error", { message: "provider rejected" })
+    })
+
+    it("keeps the current load's retry when an older load fails after it", async () => {
+      const { adapter, subtitlesFetcher } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+      prepareLoads(adapter)
+      let failOlderLoad: (error: unknown) => void = () => {}
+      subtitlesFetcher.fetch
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              failOlderLoad = reject
+            }),
+        )
+        .mockRejectedValueOnce(lookupFailure())
+      setAdPlaying(adapter, true)
+
+      const olderLoad = (adapter as any).switchSubtitlesFetcher(SUBTITLES_SOURCE.NATIVE)
+      await vi.waitFor(() => expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(1))
+      await (adapter as any).switchSubtitlesFetcher(SUBTITLES_SOURCE.NATIVE)
+      failOlderLoad(lookupFailure())
+      await olderLoad
+      setAdPlaying(adapter, false)
+
+      await vi.waitFor(() => expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(3))
+    })
+  })
+
+  it("shows a failed player lookup as itself rather than as a video without subtitles", async () => {
+    const { adapter, subtitlesFetcher } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+    subtitlesFetcher.hasAvailableSubtitles.mockRejectedValue(
+      new OverlaySubtitlesError("subtitles.errors.fetchSubTimeout"),
+    )
+    const scheduler = attachScheduler(adapter, true)
+
+    await expect((adapter as any).startTranslation()).resolves.toBe(false)
+
+    expect(subtitlesFetcher.fetch).not.toHaveBeenCalled()
+    expect(scheduler.setState).toHaveBeenLastCalledWith("error", {
+      message: "subtitles.errors.fetchSubTimeout",
+    })
+  })
+
+  it("treats a lookup that failed after the video changed as superseded", async () => {
+    const { adapter, subtitlesFetcher } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+    let videoId = "first"
+    ;(adapter as any).config.getVideoId = () => videoId
+    subtitlesFetcher.hasAvailableSubtitles.mockImplementation(async () => {
+      videoId = "second"
+      throw new OverlaySubtitlesError("subtitles.errors.fetchSubTimeout")
+    })
+
+    await expect((adapter as any).getOrLoadSourceSubtitles()).rejects.toMatchObject({
+      name: "AbortError",
+    })
   })
 
   it("keeps raw source subtitles and rebuilds processed source subtitles", async () => {
@@ -254,6 +434,18 @@ describe("universalVideoAdapter", () => {
     attachScheduler(adapter, true)
 
     await expect((adapter as any).startTranslation()).resolves.toBe(false)
+  })
+
+  // Netflix answers the track check with a round trip to the page, which can take seconds.
+  it("starts a fresh load without waiting on the fetcher's track check", async () => {
+    const { adapter, subtitlesFetcher } = createAdapter([{ text: "x", start: 0, end: 1 }])
+    subtitlesFetcher.shouldUseSameTrack.mockReturnValue(new Promise(() => {}))
+    subtitlesFetcher.fetch.mockRejectedValue(new Error("boom"))
+    attachScheduler(adapter, true)
+
+    void (adapter as any).startTranslation()
+
+    await vi.waitFor(() => expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(1))
   })
 
   // The loading state has no auto-hide of its own, so a wall that only raises a
@@ -430,6 +622,15 @@ describe("universalVideoAdapter", () => {
     expect(revertSpy).not.toHaveBeenCalled()
   })
 
+  it("closes an open word lookup when subtitles are turned off by shortcut", () => {
+    const { adapter } = createAdapter([])
+    subtitlesStore.set(wordLookupAtom, { cueStart: 0, index: 0 })
+
+    adapter.toggleSubtitlesByShortcut(false)
+
+    expect(subtitlesStore.get(wordLookupAtom)).toBeNull()
+  })
+
   it("disposes translated subtitle download state when navigation starts", () => {
     const { adapter } = createAdapter([])
     const downloader = {
@@ -527,6 +728,180 @@ describe("universalVideoAdapter", () => {
     expect(subtitlesStore.get(currentTimeMsAtom)).toBe(42_500)
 
     startSpy.mockRestore()
+  })
+
+  it("drops stale translations when an inactive track is refreshed", async () => {
+    const { adapter } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+    attachScheduler(adapter, false)
+    subtitlesStore.set(sourceTrackAtom, [{ text: "old", start: 0, end: 500 }])
+    subtitlesStore.set(translatedTrackAtom, [
+      { text: "old", start: 0, end: 500, translation: "旧" },
+    ])
+
+    await adapter.handleSourceTrackChanged()
+
+    expect(subtitlesStore.get(translatedTrackAtom)).toEqual([])
+  })
+
+  it("resets the hidden session when an inactive track is refreshed", async () => {
+    const { adapter } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+    const subtitlesScheduler = attachScheduler(adapter, false)
+    subtitlesStore.set(sourceTrackAtom, [{ text: "old", start: 0, end: 500 }])
+    ;(adapter as any).sessionProcessedFragments = [
+      { text: "old", start: 0, end: 500, translation: "旧" },
+    ]
+    ;(adapter as any).sessionVideoId = ""
+
+    await adapter.handleSourceTrackChanged()
+
+    // Otherwise re-enabling captions would resume the old cues against the new track.
+    expect((adapter as any).sessionProcessedFragments).toEqual([])
+    expect((adapter as any).sessionVideoId).toBeNull()
+    expect(subtitlesScheduler.reset).toHaveBeenCalledTimes(1)
+    expect(subtitlesStore.get(sourceTrackAtom).map((cue) => cue.text)).toEqual(["hello"])
+  })
+
+  it("refreshes the track while the transcript's first load is still in flight", async () => {
+    const { adapter, subtitlesFetcher } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+    attachScheduler(adapter, false)
+    let resolveFirstFetch!: (cues: unknown) => void
+    subtitlesFetcher.fetch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFirstFetch = resolve
+      }),
+    )
+
+    const firstLoad = adapter.ensureSourceTrackPublished()
+    await vi.waitFor(() => expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(1))
+
+    await adapter.handleSourceTrackChanged()
+
+    // An empty atom used to read as "transcript not in use", dropping the change.
+    expect(subtitlesFetcher.cleanup).toHaveBeenCalledTimes(1)
+    expect(subtitlesFetcher.fetch).toHaveBeenCalledTimes(2)
+
+    resolveFirstFetch([{ text: "old", start: 0, end: 500 }])
+    await firstLoad.catch(() => undefined)
+
+    expect(subtitlesStore.get(sourceTrackAtom).map((cue) => cue.text)).toEqual(["hello"])
+  })
+
+  it("auto-starts subtitles for a video that arrives with the learning panel open", async () => {
+    const { adapter } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+    attachScheduler(adapter, false)
+    mocks.getLocalConfig.mockResolvedValue({
+      videoSubtitles: { autoStart: { youtube: false, xcom: false, netflix: false } },
+    })
+    const toggleSpy = vi
+      .spyOn(adapter as any, "toggleSubtitlesWithSource")
+      .mockImplementation(() => undefined)
+    subtitlesStore.set(subtitlesSidebarOpenAtom, true)
+
+    await (adapter as any).tryAutoStartSubtitles()
+
+    expect(toggleSpy).toHaveBeenCalledExactlyOnceWith(true, "auto")
+  })
+
+  it("auto-starts subtitles when this platform's switch is on", async () => {
+    const { adapter } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+    attachScheduler(adapter, false)
+    mocks.getLocalConfig.mockResolvedValue({
+      videoSubtitles: { autoStart: { youtube: true, xcom: false, netflix: false } },
+    })
+    const toggleSpy = vi
+      .spyOn(adapter as any, "toggleSubtitlesWithSource")
+      .mockImplementation(() => undefined)
+
+    await (adapter as any).tryAutoStartSubtitles()
+
+    expect(toggleSpy).toHaveBeenCalledExactlyOnceWith(true, "auto")
+  })
+
+  it("ignores the switches of other platforms", async () => {
+    const { adapter } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+    attachScheduler(adapter, false)
+    mocks.getLocalConfig.mockResolvedValue({
+      videoSubtitles: { autoStart: { youtube: false, xcom: true, netflix: true } },
+    })
+    const toggleSpy = vi
+      .spyOn(adapter as any, "toggleSubtitlesWithSource")
+      .mockImplementation(() => undefined)
+
+    await (adapter as any).tryAutoStartSubtitles()
+
+    expect(toggleSpy).not.toHaveBeenCalled()
+  })
+
+  it("leaves subtitles off when neither autoStart nor the learning panel asks", async () => {
+    const { adapter } = createAdapter([{ text: "hello", start: 0, end: 500 }])
+    attachScheduler(adapter, false)
+    mocks.getLocalConfig.mockResolvedValue({
+      videoSubtitles: { autoStart: { youtube: false, xcom: false, netflix: false } },
+    })
+    const toggleSpy = vi
+      .spyOn(adapter as any, "toggleSubtitlesWithSource")
+      .mockImplementation(() => undefined)
+
+    await (adapter as any).tryAutoStartSubtitles()
+
+    expect(toggleSpy).not.toHaveBeenCalled()
+  })
+
+  describe("auto-start on X", () => {
+    function setUpVideoWithoutSubtitles() {
+      const { adapter, subtitlesFetcher } = createAdapter([])
+      ;(adapter as any).config.platform = "xcom"
+      // X hides its own captions through the text tracks, not a selector.
+      delete (adapter as any).config.selectors.nativeSubtitles
+      subtitlesFetcher.hasAvailableSubtitles.mockResolvedValue(false)
+      let active = false
+      const scheduler = {
+        ...attachScheduler(adapter, false),
+        isActive: vi.fn<() => boolean>(() => active),
+        start: vi.fn<(...args: any[]) => any>(),
+        show: vi.fn<(...args: any[]) => any>(() => {
+          active = true
+        }),
+        hide: vi.fn<(...args: any[]) => any>(() => {
+          active = false
+        }),
+      }
+      ;(adapter as any).subtitlesScheduler = scheduler
+      return { adapter, scheduler }
+    }
+
+    it("turns back off without a word when the video has no subtitles", async () => {
+      const { adapter, scheduler } = setUpVideoWithoutSubtitles()
+
+      await (adapter as any).switchSubtitlesFetcher(SUBTITLES_SOURCE.NATIVE, { quiet: true })
+
+      expect(scheduler.setState).not.toHaveBeenCalledWith("loading", expect.anything())
+      expect(scheduler.setState).not.toHaveBeenCalledWith("error", expect.anything())
+      expect(scheduler.isActive()).toBe(false)
+    })
+
+    it("only goes quiet for an automatic start", () => {
+      const { adapter } = setUpVideoWithoutSubtitles()
+      const switchSpy = vi
+        .spyOn(adapter as any, "switchSubtitlesFetcher")
+        .mockResolvedValue(undefined)
+
+      ;(adapter as any).toggleSubtitlesWithSource(true, "auto")
+      adapter.toggleSubtitlesManually(true)
+
+      expect(switchSpy.mock.calls.map((call) => (call[1] as any).quiet)).toEqual([true, false])
+    })
+
+    it("still tells a reader who asked that the video has none", async () => {
+      const { adapter, scheduler } = setUpVideoWithoutSubtitles()
+
+      await (adapter as any).switchSubtitlesFetcher(SUBTITLES_SOURCE.NATIVE)
+
+      expect(scheduler.setState).toHaveBeenCalledWith("error", {
+        message: new NoSubtitlesError().message,
+      })
+      expect(scheduler.isActive()).toBe(true)
+    })
   })
 
   it("replaceSourceTrackWindow drops cues that overlap the window by interval", () => {

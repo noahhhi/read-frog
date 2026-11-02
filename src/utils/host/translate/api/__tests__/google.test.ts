@@ -67,6 +67,186 @@ describe("google translate adapter", () => {
     expect(result).toBe(translated)
   })
 
+  describe("punctuation runs", () => {
+    const run = (index: number) => `<span data-read-frog-run="${index}"></span>`
+    const banner = `---[INTRODUCTION]${"-".repeat(61)}`
+
+    it("sends each run as an empty placeholder and puts the source run back", async () => {
+      // Live: sent as-is this banner comes back "- -[介绍] -  -  - …".
+      mockTranslateResponse(`${run(0)}[介绍]${run(1)}`)
+
+      const result = await googleTranslate(banner, "auto", "zh-CN")
+
+      expect(sentSourceText()).toBe(`${run(0)}[INTRODUCTION]${run(1)}`)
+      expect(result).toBe(`---[介绍]${"-".repeat(61)}`)
+    })
+
+    it("restores the source spacing around a run, not the model's", async () => {
+      mockTranslateResponse(`${run(0)}第二章${run(1)}`)
+
+      const result = await googleTranslate("~~~~ Chapter 2 ~~~~", "en", "zh-CN")
+
+      expect(sentSourceText()).toBe(`${run(0)} Chapter 2 ${run(1)}`)
+      expect(result).toBe("~~~~ 第二章 ~~~~")
+    })
+
+    it("drops whitespace the model adds next to a placeholder", async () => {
+      mockTranslateResponse(`+${run(0)} +${run(1)} +`)
+
+      const result = await googleTranslate("+-----+=====+", "en", "zh-CN")
+
+      expect(sentSourceText()).toBe(`+${run(0)}+${run(1)}+`)
+      expect(result).toBe("+-----+=====+")
+    })
+
+    it.each([
+      ["equals rules", "=====", run(0)],
+      ["underscore blanks", "Name: ______", `Name: ${run(0)}`],
+      ["asterisk banners", "*** Boss ***", `${run(0)} Boss ${run(1)}`],
+      ["hash banners", "### Weapons ###", `${run(0)} Weapons ${run(1)}`],
+      ["dot leaders", "Controls ...... [CTRL]", `Controls ${run(0)} [CTRL]`],
+    ])("protects %s", async (_name, source, sent) => {
+      mockTranslateResponse("ok")
+
+      await googleTranslate(source, "en", "zh-CN")
+
+      expect(sentSourceText()).toBe(sent)
+    })
+
+    it("leaves short runs and ellipses alone", async () => {
+      mockTranslateResponse("ok")
+
+      await googleTranslate("a -- b... c == d __init", "en", "zh-CN")
+
+      expect(sentSourceText()).toBe("a -- b... c == d __init")
+    })
+
+    it("protects runs in html text content but not in attribute values", async () => {
+      const source = '<b data-rf-attr="0" title="a---b">---[CONTROLS]---</b>'
+      mockTranslateResponse(`<b data-rf-attr="0" title="a---b">${run(0)}[操作]${run(1)}</b>`)
+
+      const result = await googleTranslate(source, "en", "zh-CN", { textFormat: "html" })
+
+      expect(sentSourceText()).toBe(
+        `<b data-rf-attr="0" title="a---b">${run(0)}[CONTROLS]${run(1)}</b>`,
+      )
+      expect(result).toBe('<b data-rf-attr="0" title="a---b">---[操作]---</b>')
+    })
+
+    it("keeps a banner line's dashes with preserveLineBreaks", async () => {
+      // Restoring before line reassembly must not let the prefix
+      // normalization eat the banner's leading dashes.
+      const lineBreakPair = '<br data-read-frog-lb="1">'.repeat(2)
+      mockTranslateResponse(`${run(0)}[介绍]${run(1)}${lineBreakPair}欢迎`)
+
+      const result = await googleTranslate(`${banner}\nWelcome`, "auto", "zh-CN", {
+        preserveLineBreaks: true,
+      })
+
+      expect(sentSourceText()).toBe(`${run(0)}[INTRODUCTION]${run(1)}${lineBreakPair}Welcome`)
+      expect(result).toBe(`---[介绍]${"-".repeat(61)}\n欢迎`)
+    })
+
+    it("keeps a banner line's dashes in html with preserveLineBreaks", async () => {
+      // translationOnly on a plain-text page: each banner line is its own
+      // marker-delimited segment, which is what exposes the mangling.
+      const lineBreakPair = '<br data-read-frog-lb="1">'.repeat(2)
+      mockTranslateResponse(`${run(0)}[介绍]${run(1)}${lineBreakPair}<b>欢迎</b>`)
+
+      const result = await googleTranslate(`${banner}\n<b>Welcome</b>`, "auto", "zh-CN", {
+        textFormat: "html",
+        preserveLineBreaks: true,
+      })
+
+      expect(sentSourceText()).toBe(
+        `${run(0)}[INTRODUCTION]${run(1)}${lineBreakPair}<b>Welcome</b>`,
+      )
+      expect(result).toBe(`---[介绍]${"-".repeat(61)}\n<b>欢迎</b>`)
+    })
+
+    it("accepts self-closing placeholders and drops indexes it never sent", async () => {
+      mockTranslateResponse(
+        `<span data-read-frog-run="0"/>[介绍]<span data-read-frog-run="9"></span>介绍`,
+      )
+
+      const result = await googleTranslate("---[INTRODUCTION]", "en", "zh-CN")
+
+      expect(result).toBe("---[介绍] 介绍")
+    })
+  })
+
+  describe("preserveLineBreaks with html-format input", () => {
+    const MARKER_PAIR = '<br data-read-frog-lb="1">'.repeat(2)
+
+    it("swaps only text-content newlines for markers and sends the markup unescaped", async () => {
+      mockTranslateResponse("ok")
+
+      await googleTranslate(
+        '<a data-rf-attr="0" title="two\nlines">Tom &amp; Jerry\nguide</a>\nNext line',
+        "en",
+        "zh",
+        { textFormat: "html", preserveLineBreaks: true },
+      )
+
+      // The newline inside the attribute value is not line structure.
+      expect(sentSourceText()).toBe(
+        `<a data-rf-attr="0" title="two\nlines">Tom &amp; Jerry${MARKER_PAIR}guide</a>${MARKER_PAIR}Next line`,
+      )
+    })
+
+    it("restores each line with the source's indentation and bullet", async () => {
+      // Shape of a GameFAQs guide's version-history banner. The model collapses
+      // the indentation and eats the bullet, as it does for plain text.
+      mockTranslateResponse(
+        [
+          "=====",
+          "---[版本历史]---",
+          "=====",
+          "2012年1月22日",
+          "<b>最终</b>版本",
+          '<a data-rf-attr="0">链接</a>',
+        ].join(MARKER_PAIR),
+      )
+
+      const result = await googleTranslate(
+        [
+          "=====",
+          "---[VERSION HISTORY]---",
+          "=====",
+          "    January 22, 2012",
+          "- <b>Final</b> version",
+          '<a data-rf-attr="0">Link</a>',
+        ].join("\n"),
+        "en",
+        "zh",
+        { textFormat: "html", preserveLineBreaks: true },
+      )
+
+      expect(result).toBe(
+        [
+          "=====",
+          "---[版本历史]---",
+          "=====",
+          "    2012年1月22日",
+          "- <b>最终</b>版本",
+          '<a data-rf-attr="0">链接</a>',
+        ].join("\n"),
+      )
+    })
+
+    it("keeps a newline inside an element as a line break of that element", async () => {
+      mockTranslateResponse(`<b>标题${MARKER_PAIR}副标题</b>`)
+
+      const result = await googleTranslate("<b>Title\nSubtitle</b>", "en", "zh", {
+        textFormat: "html",
+        preserveLineBreaks: true,
+      })
+
+      expect(sentSourceText()).toBe(`<b>Title${MARKER_PAIR}Subtitle</b>`)
+      expect(result).toBe("<b>标题\n副标题</b>")
+    })
+  })
+
   it("returns the HTML-encoded API payload without decoding it", async () => {
     // Decoding happens exactly once, in executeTranslate via normalizeTranslationOutput.
     mockTranslateResponse("It&#39;s")

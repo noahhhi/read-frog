@@ -1,8 +1,11 @@
+import type { AnalyticsFailureReason } from "@/types/analytics"
 import type {
+  StreamPortErrorPayload,
   StreamPortRequestMessage,
   StreamPortResponse,
   StreamPortStartMessage,
 } from "@/types/background-stream"
+import type { ErrorAction } from "@/utils/error-action"
 import { browser } from "#imports"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
 
@@ -12,6 +15,24 @@ import { getRandomUUID } from "@/utils/crypto-polyfill"
  * infrastructure hiccup rather than a provider error.
  */
 export const STREAM_PORT_DISCONNECTED_MESSAGE = "Stream disconnected unexpectedly"
+
+/**
+ * A failure the background reported over the port, with the call to action it
+ * attached, if any. A class rather than a duck-typed `action` field so a UI
+ * only ever renders buttons the extension itself built — never a URL that
+ * happened to sit on some provider's error object.
+ */
+export class StreamPortError extends Error {
+  readonly action?: ErrorAction
+  readonly reason?: AnalyticsFailureReason
+
+  constructor({ message, action, reason }: StreamPortErrorPayload) {
+    super(message)
+    this.name = "StreamPortError"
+    this.action = action
+    this.reason = reason
+  }
+}
 
 /**
  * Handles cleanup, abort signals, and disconnection automatically
@@ -86,7 +107,7 @@ export function createPortStreamPromise<TResponse = string>(
       }
 
       if (event.type === "error") {
-        finalize(() => reject(new Error(event.error.message)))
+        finalize(() => reject(new StreamPortError(event.error)))
       }
     }
 

@@ -106,7 +106,7 @@ describe("initializeConfig", () => {
     expect(setItemMock).toHaveBeenCalledTimes(1)
     expect(setItemMock).toHaveBeenCalledWith("local:config", expect.any(Object))
     const freshConfig = setItemMock.mock.calls[0]?.[1] as Config
-    for (const providerId of ["openai-default", "jalapenocloud-default", "atlascloud-default"]) {
+    for (const providerId of ["openai-default", "jalapenocloud-default", "deepseek-default"]) {
       expect(freshConfig.providersConfig.find((provider) => provider.id === providerId)).toEqual(
         expect.objectContaining({ description: expect.any(String) }),
       )
@@ -192,6 +192,37 @@ describe("initializeConfig", () => {
       schemaVersion: CONFIG_SCHEMA_VERSION,
       lastModifiedAt: 888,
     })
+  })
+
+  it("stores the migrated config as parsed, with the toolbar's order and pins in step", async () => {
+    const config = buildStableConfig()
+    const migrated = {
+      ...config,
+      selectionToolbar: {
+        ...config.selectionToolbar,
+        order: ["speak", "gone"],
+        unpinned: ["gone", "speak"],
+      },
+    }
+    getItemMock.mockResolvedValueOnce(config)
+    getMetaMock.mockResolvedValueOnce({
+      schemaVersion: CONFIG_SCHEMA_VERSION - 1,
+      lastModifiedAt: 888,
+    })
+    runMigrationMock.mockResolvedValueOnce(migrated)
+
+    const { initializeConfig } = await import("../init")
+    await initializeConfig()
+
+    const stored = setItemMock.mock.calls[0]?.[1] as Config
+    expect(stored.selectionToolbar.order).toEqual([
+      "speak",
+      "translate",
+      "default-dictionary",
+      "default-sentence-analysis",
+      "default-improve-writing",
+    ])
+    expect(stored.selectionToolbar.unpinned).toEqual(["speak"])
   })
 
   it("only updates meta when config is unchanged but lastModifiedAt is missing", async () => {

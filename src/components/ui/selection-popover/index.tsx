@@ -7,11 +7,11 @@ import { IconGripHorizontal, IconPin, IconPinnedFilled, IconX } from "@tabler/ic
 import * as React from "react"
 import { Rnd } from "react-rnd"
 import { Button } from "@/components/ui/base-ui/button"
+import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
 import {
   SELECTION_CONTENT_OVERLAY_LAYERS,
   SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE,
-} from "@/entrypoints/selection.content/overlay-layers"
-import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
+} from "@/utils/constants/selection-overlay-layers"
 import { cn } from "@/utils/styles/utils"
 import { usePreventScrollThrough } from "./use-prevent-scroll-through"
 import {
@@ -25,6 +25,8 @@ import {
 interface SelectionPopoverPosition {
   x: number
   y: number
+  /** Opens with its bottom edge at `y` and grows upward, instead of opening at `y`. */
+  above?: boolean
 }
 
 interface SelectionPopoverActions {
@@ -101,6 +103,7 @@ function SelectionPopoverRoot({
   actionsRef,
   onAnchorChange,
   onOpenChange,
+  onOpenChangeRequest,
   onPinnedChange,
   onReuseRequest,
 }: {
@@ -114,6 +117,10 @@ function SelectionPopoverRoot({
   actionsRef?: React.RefObject<SelectionPopoverActions | null>
   onAnchorChange?: (anchor: SelectionPopoverPosition | null) => void
   onOpenChange?: (open: boolean) => void
+  onOpenChangeRequest?: (
+    open: boolean,
+    eventDetails: DialogPrimitive.Root.ChangeEventDetails,
+  ) => void
   onPinnedChange?: (pinned: boolean) => void
   onReuseRequest?: (details: { anchor: SelectionPopoverPosition | null }) => void
 }) {
@@ -263,7 +270,11 @@ function SelectionPopoverRoot({
     <SelectionPopoverRootContext value={contextValue}>
       <DialogPrimitive.Root
         open={open}
-        onOpenChange={(nextOpen) => {
+        onOpenChange={(nextOpen, eventDetails) => {
+          onOpenChangeRequest?.(nextOpen, eventDetails)
+          if (eventDetails.isCanceled) {
+            return
+          }
           setOpen(nextOpen)
         }}
         disablePointerDismissal={pinned || disablePointerDismissal}
@@ -298,7 +309,7 @@ function SelectionPopoverTrigger({
       {
         type: "button",
         className: cn(
-          "flex h-7 shrink-0 cursor-pointer items-center justify-center px-2 hover:bg-accent",
+          "flex h-7 shrink-0 cursor-pointer items-center justify-center px-2 hover:bg-muted",
           className,
         ),
         children,
@@ -371,6 +382,11 @@ function SelectionPopoverShell({
       maxHeight="100vh"
       dragHandleClassName={SELECTION_POPOVER_DRAG_HANDLE_CLASS}
       cancel={SELECTION_POPOVER_NO_DRAG_SELECTOR}
+      // react-draggable's hack clears the page's selection a frame after a drag
+      // ends or the popover unmounts. Closing the popover by selecting other
+      // text then wiped that new selection. The drag handle is `select-none`, so
+      // a drag starts no selection to clear.
+      enableUserSelectHack={false}
       enableResizing={SELECTION_POPOVER_RESIZE_HANDLES}
       resizeHandleStyles={SELECTION_POPOVER_RESIZE_HANDLE_STYLES}
       onMouseDown={
@@ -383,7 +399,7 @@ function SelectionPopoverShell({
       }
       {...props}
       className={cn(
-        `pointer-events-auto flex flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-(--rf-elevation-floating) ${NOTRANSLATE_CLASS}`,
+        `pointer-events-auto flex flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg ${NOTRANSLATE_CLASS}`,
         className,
       )}
       {...{ [SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE]: "" }}

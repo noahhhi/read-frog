@@ -1,0 +1,617 @@
+import { READ_FROG_SUBTITLES_UI_HOST_ID } from "@/utils/constants/subtitles"
+
+export interface SelectionRangeSnapshot {
+  startContainer: Node
+  startOffset: number
+  endContainer: Node
+  endOffset: number
+}
+
+export interface TextControlSelectionSnapshot {
+  value: string
+  /** Null for input types without a selection API (e.g. email). */
+  selectionStart: number | null
+  selectionEnd: number | null
+}
+
+export interface SelectionSnapshot {
+  text: string
+  ranges: SelectionRangeSnapshot[]
+  /**
+   * Set when the selection is inside an `<input>`/`<textarea>`. Their text lives
+   * in the control's value, which the DOM ranges can't reach (Chrome reports
+   * them around the control element), so context is built from this instead.
+   */
+  textControl?: TextControlSelectionSnapshot
+}
+
+export interface ContextSnapshot {
+  text: string
+  paragraphs: string[]
+}
+
+type SelectionRangeSource = SelectionRangeSnapshot
+
+type ParagraphOwner = Element | ShadowRoot
+
+const ZERO_WIDTH_CHAR_REGEX = /\u200B/g
+const WHITESPACE_REGEX = /\s+/g
+const PARAGRAPH_SEPARATOR = "\n\n"
+const TEXT_CONTROL_PARAGRAPH_BREAK_REGEX = /(\n[^\S\n]*\n)/
+// Password fields are deliberately absent: their value must never reach a prompt.
+const TEXT_CONTROL_INPUT_TYPES = new Set(["email", "search", "tel", "text", "url"])
+// Text inside these is never rendered as page content (or, for textarea, is
+// only the default value), so it must not leak into paragraph context.
+const NON_CONTENT_ELEMENT_NAMES = new Set([
+  "head",
+  "noscript",
+  "script",
+  "style",
+  "template",
+  "textarea",
+  "title",
+])
+// Furigana (<rt>) and its fallback parentheses (<rp>). The browser's selection
+// text reads them alongside the base text (漢字かんじ), so speech says each word
+// twice and translation gets the reading as noise. Page translation skips them
+// for the same reason (DONT_WALK_AND_TRANSLATE_TAGS).
+const RUBY_ANNOTATION_ELEMENT_NAMES = new Set(["rp", "rt"])
+const RUBY_ANNOTATION_SELECTOR = "rp, rt"
+const NEWLINE_PADDING_REGEX = / *\n */g
+const NON_NEWLINE_WHITESPACE_REGEX = /[^\S\n]+/g
+// white-space values that render the line breaks written in the source.
+const LINE_BREAK_PRESERVING_WHITE_SPACE = new Set(["break-spaces", "pre", "pre-line", "pre-wrap"])
+const PARAGRAPH_LIKE_TAGS = new Set([
+  "P",
+  "LI",
+  "TD",
+  "TH",
+  "DT",
+  "DD",
+  "BLOCKQUOTE",
+  "PRE",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "FIGCAPTION",
+])
+const SEMANTIC_CONTAINER_TAGS = new Set(["ARTICLE", "ASIDE", "BODY", "MAIN", "NAV", "SECTION"])
+const PARAGRAPH_DISPLAY_VALUES = new Set(["block", "list-item"])
+
+export function normalizeSelectedText(value: string | null | undefined) {
+  return value?.replace(ZERO_WIDTH_CHAR_REGEX, "").trim() ?? ""
+}
+
+function normalizeParagraphText(value: string) {
+  return value.replace(ZERO_WIDTH_CHAR_REGEX, "").replace(WHITESPACE_REGEX, " ").trim()
+}
+
+export function createRangeSnapshot(rangeSource: SelectionRangeSource): SelectionRangeSnapshot {
+  return {
+    startContainer: rangeSource.startContainer,
+    startOffset: rangeSource.startOffset,
+    endContainer: rangeSource.endContainer,
+    endOffset: rangeSource.endOffset,
+  }
+}
+
+export function toLiveRange(rangeSnapshot: SelectionRangeSnapshot) {
+  const range = document.createRange()
+  range.setStart(rangeSnapshot.startContainer, rangeSnapshot.startOffset)
+  range.setEnd(rangeSnapshot.endContainer, rangeSnapshot.endOffset)
+  return range
+}
+
+function getParentNodeAcrossShadow(node: Node | null) {
+  if (!node) {
+    return null
+  }
+
+  if (node.parentNode) {
+    return node.parentNode
+  }
+
+  const root = node.getRootNode()
+  return root instanceof ShadowRoot ? root.host : null
+}
+
+function getParentElementAcrossShadow(element: Element | null) {
+  if (!element) {
+    return null
+  }
+
+  if (element.parentElement) {
+    return element.parentElement
+  }
+
+  const root = element.getRootNode()
+  return root instanceof ShadowRoot ? root.host : null
+}
+
+function getNearestParentElement(node: Node | null) {
+  if (!node) {
+    return null
+  }
+
+  if (node instanceof Element) {
+    return node
+  }
+
+  const parentNode = getParentNodeAcrossShadow(node)
+  return parentNode instanceof Element ? parentNode : null
+}
+
+function collectSelectionBoundaryNodes(selection: Selection) {
+  const boundaryNodes = new Set<Node>()
+
+  if (selection.anchorNode) {
+    boundaryNodes.add(selection.anchorNode)
+  }
+  if (selection.focusNode) {
+    boundaryNodes.add(selection.focusNode)
+  }
+
+  const rangeCount = typeof selection.rangeCount === "number" ? selection.rangeCount : 0
+
+  for (let index = 0; index < rangeCount; index += 1) {
+    try {
+      const range = selection.getRangeAt(index)
+      boundaryNodes.add(range.startContainer)
+      boundaryNodes.add(range.endContainer)
+    } catch {
+      break
+    }
+  }
+
+  return [...boundaryNodes]
+}
+
+function getReadFrogSubtitleShadowRoot() {
+  const subtitlesHost = document.getElementById(READ_FROG_SUBTITLES_UI_HOST_ID)
+  const subtitlesRoot = subtitlesHost?.shadowRoot
+  return subtitlesRoot ?? null
+}
+
+function collectSelectionShadowRoots(selection: Selection) {
+  const shadowRoots = new Set<ShadowRoot>()
+
+  for (const boundaryNode of collectSelectionBoundaryNodes(selection)) {
+    let current: Node | null = boundaryNode
+
+    while (current) {
+      const root = current.getRootNode()
+      if (!(root instanceof ShadowRoot)) {
+        break
+      }
+
+      shadowRoots.add(root)
+      current = root.host
+    }
+  }
+
+  const subtitleShadowRoot = getReadFrogSubtitleShadowRoot()
+  if (subtitleShadowRoot) {
+    shadowRoots.add(subtitleShadowRoot)
+  }
+
+  return [...shadowRoots]
+}
+
+function readSelectionRangeSnapshots(selection: Selection | null) {
+  if (!selection) {
+    return []
+  }
+
+  const composedSelection = selection as Selection & {
+    getComposedRanges?: (options?: { shadowRoots?: ShadowRoot[] }) => SelectionRangeSource[]
+  }
+
+  if (typeof composedSelection.getComposedRanges === "function") {
+    const composedRanges = composedSelection.getComposedRanges({
+      shadowRoots: collectSelectionShadowRoots(selection),
+    })
+
+    if (composedRanges.length > 0) {
+      return composedRanges.map(createRangeSnapshot)
+    }
+  }
+
+  const snapshots: SelectionRangeSnapshot[] = []
+  const rangeCount = typeof selection.rangeCount === "number" ? selection.rangeCount : 0
+
+  if (rangeCount > 0) {
+    for (let index = 0; index < rangeCount; index += 1) {
+      try {
+        snapshots.push(createRangeSnapshot(selection.getRangeAt(index)))
+      } catch {
+        return snapshots
+      }
+    }
+
+    return snapshots
+  }
+
+  try {
+    snapshots.push(createRangeSnapshot(selection.getRangeAt(0)))
+  } catch {
+    return snapshots
+  }
+
+  return snapshots
+}
+
+function getDeepActiveElement() {
+  let activeElement = document.activeElement
+  while (activeElement?.shadowRoot?.activeElement) {
+    activeElement = activeElement.shadowRoot.activeElement
+  }
+
+  return activeElement
+}
+
+function readTextControlSelection(): TextControlSelectionSnapshot | null {
+  const control = getDeepActiveElement()
+  const isTextControl =
+    control instanceof HTMLTextAreaElement ||
+    (control instanceof HTMLInputElement && TEXT_CONTROL_INPUT_TYPES.has(control.type))
+  if (!isTextControl) {
+    return null
+  }
+
+  const { selectionStart, selectionEnd, value } = control
+  // A focused control with a collapsed caret is not where the selected text came from.
+  if (selectionStart !== null && selectionStart === selectionEnd) {
+    return null
+  }
+
+  return { value, selectionStart, selectionEnd }
+}
+
+export function readSelectionSnapshot(selection: Selection | null): SelectionSnapshot | null {
+  const text = normalizeSelectedText(selection?.toString())
+  if (text === "") {
+    return null
+  }
+
+  const ranges = readSelectionRangeSnapshots(selection)
+  if (ranges.length === 0) {
+    return null
+  }
+
+  const textControl = readTextControlSelection()
+
+  return textControl
+    ? { text, ranges, textControl }
+    : { text: removeRubyAnnotationsFromSelectedText(text, ranges), ranges }
+}
+
+// Rebuilds the selected text without furigana, but only when the selection holds
+// some: every other selection keeps the browser's own text. A selection of
+// nothing but furigana keeps it too, since there is nothing else to read.
+function removeRubyAnnotationsFromSelectedText(text: string, ranges: SelectionRangeSnapshot[]) {
+  if (!ranges.some(doesRangeIncludeRubyAnnotation)) {
+    return text
+  }
+
+  const textWithoutAnnotations = normalizeSelectedText(
+    ranges.map(readRangeTextWithoutRubyAnnotations).join("\n"),
+  )
+  return textWithoutAnnotations === "" ? text : textWithoutAnnotations
+}
+
+function doesRangeIncludeRubyAnnotation(rangeSnapshot: SelectionRangeSnapshot) {
+  let liveRange: Range
+  try {
+    liveRange = toLiveRange(rangeSnapshot)
+  } catch {
+    return false
+  }
+
+  const root = getTraversalRoot(rangeSnapshot)
+  if (getNearestParentElement(root)?.closest(RUBY_ANNOTATION_SELECTOR)) {
+    return true
+  }
+
+  if (!(root instanceof Element || root instanceof Document || root instanceof DocumentFragment)) {
+    return false
+  }
+
+  return [...root.querySelectorAll(RUBY_ANNOTATION_SELECTOR)].some((annotation) =>
+    doesRangeIntersectNode(liveRange, annotation),
+  )
+}
+
+// Close to what Selection.toString() gives for ordinary page text: whitespace
+// collapses unless the page keeps its line breaks, and a <br> or text in another
+// paragraph starts a new line.
+function readRangeTextWithoutRubyAnnotations(rangeSnapshot: SelectionRangeSnapshot) {
+  let liveRange: Range
+  try {
+    liveRange = toLiveRange(rangeSnapshot)
+  } catch {
+    return ""
+  }
+
+  const walker = document.createTreeWalker(
+    getTraversalRoot(rangeSnapshot),
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        if (node instanceof Element) {
+          // Hidden text is left out of the browser's selection text as well.
+          if (
+            !doesRangeIntersectNode(liveRange, node) ||
+            isSkippedTextElement(node) ||
+            window.getComputedStyle(node).display === "none"
+          ) {
+            return NodeFilter.FILTER_REJECT
+          }
+
+          return node.localName === "br" ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+        }
+
+        return NodeFilter.FILTER_ACCEPT
+      },
+    },
+  )
+
+  const textParts: string[] = []
+  let previousOwner: ParagraphOwner | null | undefined
+  let currentNode = walker.nextNode()
+  while (currentNode) {
+    // The only element the walker accepts is <br>.
+    if (currentNode instanceof Element) {
+      textParts.push("\n")
+    } else if (currentNode instanceof Text && doesRangeIntersectNode(liveRange, currentNode)) {
+      const start = currentNode === liveRange.startContainer ? liveRange.startOffset : 0
+      const end =
+        currentNode === liveRange.endContainer ? liveRange.endOffset : currentNode.data.length
+      const owner = findParagraphOwner(currentNode)
+      if (previousOwner !== undefined && owner !== previousOwner) {
+        textParts.push("\n")
+      }
+      textParts.push(collapseSelectedWhitespace(currentNode, currentNode.data.slice(start, end)))
+      previousOwner = owner
+    }
+
+    currentNode = walker.nextNode()
+  }
+
+  return textParts.join("").replace(NEWLINE_PADDING_REGEX, "\n")
+}
+
+function collapseSelectedWhitespace(textNode: Text, value: string) {
+  const parent = textNode.parentElement
+  const keepsLineBreaks =
+    parent !== null &&
+    LINE_BREAK_PRESERVING_WHITE_SPACE.has(window.getComputedStyle(parent).whiteSpace)
+  return value.replace(keepsLineBreaks ? NON_NEWLINE_WHITESPACE_REGEX : WHITESPACE_REGEX, " ")
+}
+
+function getCommonAncestorNode(startContainer: Node, endContainer: Node) {
+  const startAncestors = new Set<Node>()
+  let current: Node | null = startContainer
+
+  while (current) {
+    startAncestors.add(current)
+    current = getParentNodeAcrossShadow(current)
+  }
+
+  current = endContainer
+  while (current) {
+    if (startAncestors.has(current)) {
+      return current
+    }
+
+    current = getParentNodeAcrossShadow(current)
+  }
+
+  return startContainer.ownerDocument?.body ?? startContainer
+}
+
+function getTraversalRoot(rangeSnapshot: SelectionRangeSnapshot) {
+  const commonAncestor = getCommonAncestorNode(
+    rangeSnapshot.startContainer,
+    rangeSnapshot.endContainer,
+  )
+
+  if (commonAncestor instanceof Text) {
+    return commonAncestor.parentNode ?? commonAncestor
+  }
+
+  return commonAncestor
+}
+
+function doesRangeIntersectNode(range: Range, node: Node) {
+  if (typeof range.intersectsNode === "function") {
+    return range.intersectsNode(node)
+  }
+
+  const nodeRange = document.createRange()
+  if (node instanceof Text) {
+    nodeRange.selectNodeContents(node)
+  } else {
+    nodeRange.selectNode(node)
+  }
+
+  return !(
+    range.compareBoundaryPoints(Range.END_TO_START, nodeRange) <= 0 ||
+    range.compareBoundaryPoints(Range.START_TO_END, nodeRange) >= 0
+  )
+}
+
+function isParagraphLikeDisplay(element: Element) {
+  if (SEMANTIC_CONTAINER_TAGS.has(element.tagName)) {
+    return false
+  }
+
+  return PARAGRAPH_DISPLAY_VALUES.has(window.getComputedStyle(element).display)
+}
+
+function findParagraphOwner(node: Node | null): ParagraphOwner | null {
+  let current = getNearestParentElement(node)
+  let semanticFallback: ParagraphOwner | null = null
+
+  // <html> is display:block too, but owning it would pull in <head> text.
+  while (current && current !== current.ownerDocument.documentElement) {
+    if (PARAGRAPH_LIKE_TAGS.has(current.tagName)) {
+      return current
+    }
+
+    if (SEMANTIC_CONTAINER_TAGS.has(current.tagName)) {
+      semanticFallback ??= current
+    } else if (isParagraphLikeDisplay(current)) {
+      return current
+    }
+
+    const parentElement = getParentElementAcrossShadow(current)
+    if (!parentElement) {
+      const root = current.getRootNode()
+      if (root instanceof ShadowRoot) {
+        return semanticFallback ?? root
+      }
+    }
+
+    current = parentElement
+  }
+
+  return semanticFallback
+}
+
+// Neither page content nor something a reader means to have selected.
+function isSkippedTextElement(element: Element) {
+  return (
+    NON_CONTENT_ELEMENT_NAMES.has(element.localName) ||
+    RUBY_ANNOTATION_ELEMENT_NAMES.has(element.localName)
+  )
+}
+
+function createContentTextWalker(root: Node) {
+  return document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (node instanceof Element) {
+        return isSkippedTextElement(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP
+      }
+
+      return normalizeParagraphText(node.textContent ?? "") === ""
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT
+    },
+  })
+}
+
+function extractOwnerText(owner: ParagraphOwner) {
+  const textParts: string[] = []
+  const walker = createContentTextWalker(owner)
+
+  let currentNode = walker.nextNode()
+  while (currentNode) {
+    textParts.push(currentNode.textContent ?? "")
+    currentNode = walker.nextNode()
+  }
+
+  return normalizeParagraphText(textParts.join(""))
+}
+
+function compareNodesInDocumentOrder(left: ParagraphOwner, right: ParagraphOwner) {
+  if (left === right) {
+    return 0
+  }
+
+  const position = left.compareDocumentPosition(right)
+  if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+    return -1
+  }
+  if (position & Node.DOCUMENT_POSITION_PRECEDING) {
+    return 1
+  }
+
+  return 0
+}
+
+function collectParagraphOwners(rangeSnapshots: SelectionRangeSnapshot[]) {
+  const paragraphOwners = new Set<ParagraphOwner>()
+
+  for (const rangeSnapshot of rangeSnapshots) {
+    let hasIntersectedTextNode = false
+    let liveRange: Range
+
+    try {
+      liveRange = toLiveRange(rangeSnapshot)
+    } catch {
+      continue
+    }
+
+    const walker = createContentTextWalker(getTraversalRoot(rangeSnapshot))
+
+    let currentNode = walker.nextNode()
+    while (currentNode) {
+      if (currentNode instanceof Text && doesRangeIntersectNode(liveRange, currentNode)) {
+        const owner = findParagraphOwner(currentNode)
+        if (owner) {
+          paragraphOwners.add(owner)
+          hasIntersectedTextNode = true
+        }
+      }
+
+      currentNode = walker.nextNode()
+    }
+
+    if (!hasIntersectedTextNode) {
+      const owner = findParagraphOwner(rangeSnapshot.startContainer)
+      if (owner) {
+        paragraphOwners.add(owner)
+      }
+    }
+  }
+
+  return [...paragraphOwners].sort(compareNodesInDocumentOrder)
+}
+
+// Blank-line separated blocks of the control's value that overlap the selection.
+function collectTextControlParagraphs({
+  value,
+  selectionStart,
+  selectionEnd,
+}: TextControlSelectionSnapshot) {
+  const start = selectionStart ?? 0
+  const end = selectionEnd ?? value.length
+  const paragraphs: string[] = []
+  let blockStart = 0
+
+  for (const block of value.split(TEXT_CONTROL_PARAGRAPH_BREAK_REGEX)) {
+    const blockEnd = blockStart + block.length
+    const paragraph = normalizeParagraphText(block)
+    if (paragraph !== "" && blockStart < end && blockEnd > start) {
+      paragraphs.push(paragraph)
+    }
+    blockStart = blockEnd
+  }
+
+  return paragraphs
+}
+
+export function buildContextSnapshot(selection: SelectionSnapshot | null): ContextSnapshot | null {
+  if (!selection || selection.text === "") {
+    return null
+  }
+
+  const paragraphs = selection.textControl
+    ? collectTextControlParagraphs(selection.textControl)
+    : collectParagraphOwners(selection.ranges).map(extractOwnerText).filter(Boolean)
+
+  if (paragraphs.length === 0) {
+    return {
+      text: selection.text,
+      paragraphs: [selection.text],
+    }
+  }
+
+  return {
+    text: paragraphs.join(PARAGRAPH_SEPARATOR),
+    paragraphs,
+  }
+}

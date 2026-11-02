@@ -1,6 +1,6 @@
 import type { ComponentType } from "react"
 import { lazy, Suspense } from "react"
-import { Route, Routes } from "react-router"
+import { Navigate, Route, Routes } from "react-router"
 import { ROUTE_DEFS } from "./app-sidebar/nav-items"
 
 type RoutePath = (typeof ROUTE_DEFS)[number]["path"]
@@ -38,6 +38,19 @@ const InputTranslationPage = lazy(() =>
 const TextToSpeechPage = lazy(() =>
   import("./pages/text-to-speech").then((module) => ({ default: module.TextToSpeechPage })),
 )
+const GlossaryPage = lazy(() =>
+  import("./pages/advanced/glossary").then((module) => ({ default: module.GlossaryPage })),
+)
+const GlossaryEditorPage = lazy(() =>
+  import("./pages/advanced/glossary/editor-page").then((module) => ({
+    default: module.GlossaryEditorPage,
+  })),
+)
+
+/** Advanced has no page of its own; its group's only entry is the glossary. */
+function AdvancedRedirect() {
+  return <Navigate to="/advanced/glossary" replace />
+}
 const HelpAndCommunityPage = lazy(() =>
   import("./pages/help-and-community").then((module) => ({ default: module.HelpAndCommunityPage })),
 )
@@ -91,6 +104,11 @@ const SubtitlesCustomCssPage = lazy(() =>
     default: module.SubtitlesCustomCssPage,
   })),
 )
+const SubtitlesAutoStartPage = lazy(() =>
+  import("./pages/video-subtitles/preference/auto-start-page").then((module) => ({
+    default: module.SubtitlesAutoStartPage,
+  })),
+)
 const SubtitlesStylePage = lazy(() =>
   import("./pages/video-subtitles/subtitles-style/style-editor").then((module) => ({
     default: module.SubtitlesStylePage,
@@ -120,7 +138,10 @@ const ROUTE_COMPONENTS: Record<RoutePath, ComponentType> = {
   "/context-menu": ContextMenuPage,
   "/input-translation": InputTranslationPage,
   "/tts": TextToSpeechPage,
+  "/advanced": AdvancedRedirect,
   "/help-and-community": HelpAndCommunityPage,
+  "/advanced/glossary": GlossaryPage,
+  "/advanced/glossary/:glossaryId": GlossaryEditorPage,
   "/preference/config-backup": ConfigBackupPage,
   "/preference/extension-activation": ExtensionActivationPage,
   "/page-translation/custom-css": CustomCssPage,
@@ -131,6 +152,7 @@ const ROUTE_COMPONENTS: Record<RoutePath, ComponentType> = {
     NeverAutoTranslateWebsitesPage,
   "/page-translation/translation-control/site-rules": SiteRulesPage,
   "/page-translation/translation-queue": TranslationQueuePage,
+  "/video-subtitles/auto-start": SubtitlesAutoStartPage,
   "/video-subtitles/style": SubtitlesStylePage,
   "/video-subtitles/style/custom-css": SubtitlesCustomCssPage,
   "/video-subtitles/prompts": SubtitlesCustomPromptsPage,

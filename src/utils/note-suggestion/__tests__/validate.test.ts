@@ -15,20 +15,18 @@ function createAction(
     systemPrompt: "system",
     prompt: "prompt",
     outputSchema: [
-      { id: "field-term", name: "Term", type: "string", description: "", speaking: true },
+      { id: "field-term", name: "Term", type: "string", description: "" },
       {
         id: "field-definition",
         name: "Definition",
         type: "string",
         description: "",
-        speaking: false,
       },
       {
         id: "field-difficulty",
         name: "Difficulty",
         type: "number",
         description: "",
-        speaking: false,
       },
     ],
     ...overrides,
@@ -75,6 +73,7 @@ describe("validateNoteSuggestion", () => {
     return validateNoteSuggestion({
       envelope: { notes, summaryFieldName },
       action,
+      selection: "The ephemeral beauty of cherry blossoms.",
     })
   }
 
@@ -152,7 +151,6 @@ describe("validateNoteSuggestion", () => {
           name: "Score",
           type: "number",
           description: "",
-          speaking: false,
         },
       ],
     })
@@ -161,7 +159,28 @@ describe("validateNoteSuggestion", () => {
       validateNoteSuggestion({
         envelope: { notes: [note([{ name: "Score", value: 8 }])] },
         action: numericAction,
+        selection: "eight",
       }),
     ).toEqual({ notes: [{ Score: 8 }], summaryFieldName: null })
+  })
+
+  it("keeps the selected text, as given, in a selection field the model does not write", () => {
+    const sentenceAction = createAction({
+      outputSchema: [
+        { id: "sentence", name: "Sentence", type: "string", description: "", source: "selection" },
+        { id: "annotations", name: "Annotations", type: "string", description: "" },
+      ],
+    })
+
+    expect(
+      validateNoteSuggestion({
+        envelope: { notes: [note([{ name: "Annotations", value: "[]" }])] },
+        action: sentenceAction,
+        selection: "Only then did she turn it down.",
+      }),
+    ).toEqual({
+      notes: [{ Annotations: "[]", Sentence: "Only then did she turn it down." }],
+      summaryFieldName: null,
+    })
   })
 })

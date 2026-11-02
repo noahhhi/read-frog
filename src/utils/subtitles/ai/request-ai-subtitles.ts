@@ -2,11 +2,12 @@ import type { VideoTranscriptStatus } from "@read-frog/api-contract"
 import type { SubtitlesError } from "@/utils/subtitles/errors"
 import type { SubtitlesFragment } from "@/utils/subtitles/types"
 import { safe } from "@orpc/client"
+import { billingAction, upgradeAction } from "@/utils/error-action"
 import { i18n } from "@/utils/i18n"
 import { isORPCPublicAppError } from "@/utils/notebase/errors"
 import { orpcClient } from "@/utils/orpc/client"
+import { sleep } from "@/utils/sleep"
 import { OverlaySubtitlesError, ToastSubtitlesError } from "@/utils/subtitles/errors"
-import { billingAction, upgradeAction } from "./entitlement"
 
 export interface AiSubtitlesContext {
   videoId: string
@@ -38,10 +39,6 @@ function pollTimeoutMs(durationSec: number): number {
   return Math.min(POLL_MAX_TIMEOUT_MS, POLL_BASE_TIMEOUT_MS + durationSec * 100)
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 /**
  * Turns a transcription endpoint's refusal into something the player can say.
  * Shared by `create`, the poll's `get` and `getSubtitles` — all three are
@@ -55,7 +52,7 @@ function mapTranscriptError(error: unknown): SubtitlesError {
   if (isORPCPublicAppError(error, "VIDEO_TRANSCRIPTION_SUBSCRIPTION_REQUIRED")) {
     return new ToastSubtitlesError(
       i18n.t("subtitles.errors.aiSubscriptionRequired"),
-      upgradeAction(),
+      upgradeAction("extension_video_quota"),
     )
   }
   if (isORPCPublicAppError(error, "VIDEO_TRANSCRIPTION_PAYMENT_REQUIRED")) {
@@ -64,7 +61,10 @@ function mapTranscriptError(error: unknown): SubtitlesError {
   if (isORPCPublicAppError(error, "VIDEO_TRANSCRIPTION_QUOTA_EXCEEDED")) {
     // The pre-flight normally catches this and can name the reset date; by the
     // time the server refuses, only it knows the remainder and we do not.
-    return new ToastSubtitlesError(i18n.t("subtitles.errors.aiQuotaExceeded"), upgradeAction())
+    return new ToastSubtitlesError(
+      i18n.t("subtitles.errors.aiQuotaExceeded"),
+      upgradeAction("extension_video_quota"),
+    )
   }
   if (isORPCPublicAppError(error, "VIDEO_TRANSCRIPTION_UNSUPPORTED_LENGTH")) {
     // A property of the video, not of the account — no upgrade and no waiting

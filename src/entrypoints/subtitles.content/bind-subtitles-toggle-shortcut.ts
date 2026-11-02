@@ -1,13 +1,10 @@
-import type { Hotkey } from "@tanstack/hotkeys"
+import type { HotkeyChord } from "@tanstack/hotkeys"
 import type { SubtitlesProvidersAdapter } from "./universal-adapter"
 import { HotkeyManager } from "@tanstack/hotkeys"
 import { toastManager } from "@/components/ui/base-ui/toast"
 import { getLocalConfig } from "@/utils/config/storage"
 import { i18n } from "@/utils/i18n"
-import {
-  isPageTranslationShortcutEmpty,
-  isValidConfiguredPageTranslationShortcut,
-} from "@/utils/page-translation-shortcut"
+import { isShortcutEmpty, isValidShortcut } from "@/utils/shortcut"
 import { subtitlesStore, subtitlesVisibleAtom } from "./atoms"
 
 const NOOP = () => {}
@@ -25,16 +22,16 @@ export async function bindSubtitlesToggleShortcut(
 ): Promise<() => void> {
   const config = await getLocalConfig()
   const shortcut = config?.videoSubtitles?.toggleShortcut
-  if (!shortcut || isPageTranslationShortcutEmpty(shortcut)) {
+  if (!shortcut || isShortcutEmpty(shortcut)) {
     return NOOP
   }
 
-  if (!isValidConfiguredPageTranslationShortcut(shortcut)) {
+  if (!isValidShortcut(shortcut)) {
     return NOOP
   }
 
   const registration = HotkeyManager.getInstance().register(
-    shortcut as Hotkey,
+    shortcut as HotkeyChord,
     () => {
       const nextVisible = !subtitlesStore.get(subtitlesVisibleAtom)
       adapter.toggleSubtitlesByShortcut(nextVisible)

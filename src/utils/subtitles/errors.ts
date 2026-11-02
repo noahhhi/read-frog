@@ -1,15 +1,5 @@
-/**
- * A call to action carried alongside a toast error — "Upgrade", "Log in".
- * Described as data rather than a callback so the layer that raises the error
- * stays free of UI concerns and the tests can assert on it without comparing
- * functions; the content script's toast host turns it into a button.
- */
-export interface SubtitlesErrorAction {
-  /** Already localized. */
-  label: string
-  /** Absolute URL, opened through the background worker on click. */
-  url: string
-}
+import type { ErrorAction } from "@/utils/error-action"
+import { i18n } from "@/utils/i18n"
 
 export class SubtitlesError extends Error {
   readonly code: string
@@ -22,9 +12,9 @@ export class SubtitlesError extends Error {
 }
 
 export class ToastSubtitlesError extends SubtitlesError {
-  readonly action?: SubtitlesErrorAction
+  readonly action?: ErrorAction
 
-  constructor(code: string, action?: SubtitlesErrorAction) {
+  constructor(code: string, action?: ErrorAction) {
     super(code)
     this.name = "ToastSubtitlesError"
     this.action = action
@@ -35,5 +25,12 @@ export class OverlaySubtitlesError extends SubtitlesError {
   constructor(code: string) {
     super(code)
     this.name = "OverlaySubtitlesError"
+  }
+}
+
+/** The video has no captions to load — a fact about the video, not a failure of ours. */
+export class NoSubtitlesError extends OverlaySubtitlesError {
+  constructor() {
+    super(i18n.t("subtitles.errors.noSubtitlesFound"))
   }
 }

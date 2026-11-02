@@ -1,15 +1,17 @@
 import type { RefObject } from "react"
 import type { SubtitlePosition } from "../atoms"
-import { useAtom, useSetAtom } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { DEFAULT_SUBTITLE_POSITION } from "@/utils/constants/subtitles"
 import { getContainingShadowRoot } from "@/utils/host/dom/node"
 import { subtitlesPositionAtom } from "../atoms"
+import { subtitlesHeldAtom } from "../learning/atoms"
 import { useSubtitlesUI } from "./subtitles-ui-context"
 import { useControlsInfo } from "./use-controls-visible"
 
 const BASE_FONT_RATIO = 0.03
+const MAX_LAYOUT_RETRY_FRAMES = 120
 
 interface SubtitleWindowStyle {
   width: number
@@ -83,7 +85,19 @@ function calculateAnchorPosition(ctx: AnchorPositionContext): SubtitlePosition {
 export function useVerticalDrag() {
   const { controlsConfig, containerShrinkRatio } = useSubtitlesUI()
   const windowRef = useRef<HTMLDivElement>(null)
-  const { controlsVisible, controlsHeight } = useControlsInfo(windowRef, controlsConfig)
+  const { controlsVisible: liveControlsVisible, controlsHeight } = useControlsInfo(
+    windowRef,
+    controlsConfig,
+  )
+  // The box makes room for the player's controls, which show and hide as the
+  // pointer moves, except while the subtitles are held: then it stays where it
+  // was shown, so the words never move out from under the pointer. The pointer
+  // reaching the box often shows the controls in the same render.
+  const held = useAtomValue(subtitlesHeldAtom)
+  const [controlsVisible, setControlsVisible] = useState(liveControlsVisible)
+  if (!held && controlsVisible !== liveControlsVisible) {
+    setControlsVisible(liveControlsVisible)
+  }
   const setVideoSubtitles = useSetAtom(configFieldsAtomMap.videoSubtitles)
   const containerRef = useRef<HTMLDivElement>(null)
   const handleRef = useRef<HTMLDivElement>(null)
@@ -111,8 +125,9 @@ export function useVerticalDrag() {
     })
   })
 
-  const onMouseDown = useEffectEvent((e: MouseEvent) => {
+  const onPointerDown = useEffectEvent((e: PointerEvent) => {
     if (e.button !== 0) return
+    handleRef.current?.setPointerCapture(e.pointerId)
     isDraggingRef.current = true
     setIsDragging(true)
     startYRef.current = e.clientY
@@ -121,7 +136,7 @@ export function useVerticalDrag() {
     e.stopPropagation()
   })
 
-  const onMouseMove = useEffectEvent((e: MouseEvent) => {
+  const onPointerMove = useEffectEvent((e: PointerEvent) => {
     if (!isDraggingRef.current) return
 
     const rects = getRects(containerRef)
@@ -164,7 +179,7 @@ export function useVerticalDrag() {
     setPosition({ ...startPositionRef.current, percent: newPercent })
   })
 
-  const onMouseUp = useEffectEvent(() => {
+  const onPointerUp = useEffectEvent(() => {
     if (!isDraggingRef.current) return
     isDraggingRef.current = false
     setIsDragging(false)
@@ -190,26 +205,41 @@ export function useVerticalDrag() {
     const container = containerRef.current
     if (!handle || !container) return undefined
 
-    const videoContainer = getVideoContainer(container)
-
-    handle.addEventListener("mousedown", onMouseDown)
-    window.addEventListener("mousemove", onMouseMove)
-    window.addEventListener("mouseup", onMouseUp)
+    handle.addEventListener("pointerdown", onPointerDown)
+    handle.addEventListener("pointermove", onPointerMove)
+    handle.addEventListener("pointerup", onPointerUp)
+    handle.addEventListener("lostpointercapture", onPointerUp)
 
     const resizeObserver = new ResizeObserver(() => {
       updateWindowStyle()
       clampPosition()
     })
 
-    if (videoContainer) {
-      resizeObserver.observe(videoContainer)
-      updateWindowStyle()
+    // The host may still be detached or unlaid-out on mount — x.com rebuilds the
+    // player around it — and a resize observer bound to nothing leaves the
+    // subtitle window at zero size, which collapses positioning and dragging.
+    let frame = 0
+    let attempts = 0
+    const observeVideoContainer = () => {
+      const videoContainer = getVideoContainer(container)
+      if (videoContainer && videoContainer.getBoundingClientRect().height > 0) {
+        resizeObserver.observe(videoContainer)
+        updateWindowStyle()
+        return
+      }
+
+      if (attempts++ < MAX_LAYOUT_RETRY_FRAMES) {
+        frame = requestAnimationFrame(observeVideoContainer)
+      }
     }
+    observeVideoContainer()
 
     return () => {
-      handle.removeEventListener("mousedown", onMouseDown)
-      window.removeEventListener("mousemove", onMouseMove)
-      window.removeEventListener("mouseup", onMouseUp)
+      cancelAnimationFrame(frame)
+      handle.removeEventListener("pointerdown", onPointerDown)
+      handle.removeEventListener("pointermove", onPointerMove)
+      handle.removeEventListener("pointerup", onPointerUp)
+      handle.removeEventListener("lostpointercapture", onPointerUp)
       resizeObserver.disconnect()
     }
   })

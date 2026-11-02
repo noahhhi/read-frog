@@ -14,7 +14,6 @@ import {
   AccountNameWithPlan,
   LogoutMenuItem,
   WebAppMenuItem,
-  openLogIn,
   useUserAccountMenu,
 } from "./shared"
 
@@ -46,7 +45,13 @@ export function UserAccountMenuPopup() {
       <div className="flex items-center gap-2">
         {avatar}
         <span className="text-sm text-muted-foreground">{displayName}</span>
-        <Button size="xs" variant="outline" onClick={openLogIn}>
+        <Button
+          ref={account.logInAnchorRef}
+          size="xs"
+          variant="outline"
+          disabled={account.grantAccess.isPending}
+          onClick={account.logIn}
+        >
           {i18n.t("account.login")}
         </Button>
       </div>
@@ -57,7 +62,7 @@ export function UserAccountMenuPopup() {
           render={
             <button
               type="button"
-              className="group/account flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:bg-accent/70 data-[popup-open]:bg-accent"
+              className="group/account flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:bg-muted/70 data-[popup-open]:bg-muted"
             />
           }
         >

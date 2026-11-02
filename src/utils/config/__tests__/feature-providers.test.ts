@@ -318,6 +318,7 @@ describe("feature providers", () => {
         accessAllowed: true,
         available: false,
         unavailableReason: "ultra_required",
+        upgradeTo: "ultra",
         requiresUltra: true,
         modelRevision: "r1",
       }
@@ -381,6 +382,7 @@ describe("feature providers", () => {
           accessAllowed: true,
           available: true,
           unavailableReason: null,
+          upgradeTo: null,
           requiresUltra: false,
           modelRevision: "r1",
         })
@@ -404,6 +406,7 @@ describe("feature providers", () => {
           accessAllowed: true,
           available: false,
           unavailableReason: "quota_exhausted",
+          upgradeTo: null,
           requiresUltra: false,
           modelRevision: "r1",
         })
@@ -420,6 +423,7 @@ describe("feature providers", () => {
         selectionToolbar: {
           ...DEFAULT_CONFIG.selectionToolbar,
           builtInActions: {
+            ...DEFAULT_CONFIG.selectionToolbar.builtInActions,
             dictionary: {
               ...DEFAULT_CONFIG.selectionToolbar.builtInActions.dictionary,
               providerId: "deleted-provider",
@@ -436,6 +440,35 @@ describe("feature providers", () => {
 
       expect(result?.builtInActions.dictionary.providerId).toBe("jalapenocloud-default")
       expect(result?.customActions).toEqual([])
+    })
+
+    it("reassigns the built-in Sentence Analysis provider and leaves the Dictionary's", () => {
+      const config = {
+        ...DEFAULT_CONFIG,
+        selectionToolbar: {
+          ...DEFAULT_CONFIG.selectionToolbar,
+          builtInActions: {
+            ...DEFAULT_CONFIG.selectionToolbar.builtInActions,
+            sentenceAnalysis: { enabled: false, providerId: "deleted-provider" },
+          },
+        },
+      }
+
+      const result = computeSelectionToolbarCustomActionFallbacksAfterDeletion(
+        "deleted-provider",
+        config,
+        [getProviderById("jalapenocloud-default")],
+      )
+
+      expect(result?.builtInActions).toEqual({
+        dictionary: DEFAULT_CONFIG.selectionToolbar.builtInActions.dictionary,
+        sentenceAnalysis: {
+          enabled: false,
+          providerId: "jalapenocloud-default",
+          notebaseConnection: undefined,
+        },
+        improveWriting: DEFAULT_CONFIG.selectionToolbar.builtInActions.improveWriting,
+      })
     })
 
     it("reassigns affected custom actions to the first enabled llm provider", () => {
@@ -458,7 +491,6 @@ describe("feature providers", () => {
                   name: "summary",
                   type: "string" as const,
                   description: "",
-                  speaking: false,
                 },
               ],
             },
@@ -508,7 +540,6 @@ describe("feature providers", () => {
                   name: "summary",
                   type: "string" as const,
                   description: "",
-                  speaking: false,
                 },
               ],
             },

@@ -64,7 +64,7 @@ export function CSSEditor() {
       {/* The section heading already names this editor, so the row carries only the docs link. */}
       <div className="flex items-start justify-end">
         <a
-          href={`${env.WXT_WEBSITE_URL}/docs/custom-css`}
+          href={`${env.WXT_WEBSITE_URL}/docs/page-translation/style`}
           className="text-xs text-link hover:opacity-90"
           target="_blank"
           rel="noreferrer"
@@ -82,7 +82,7 @@ export function CSSEditor() {
       <div className="flex items-center justify-between gap-2">
         <div
           className={cn(
-            "text-sm text-green-500",
+            "text-sm text-success",
             isValidating && "text-muted-foreground",
             (hasSyntaxError || hasLengthError) && "text-destructive",
           )}

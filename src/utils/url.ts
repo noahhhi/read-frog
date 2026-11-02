@@ -1,5 +1,3 @@
-import { z } from "zod"
-
 export function getPageTranslationOriginScope(url: string): string | null {
   try {
     const urlObj = new URL(url)
@@ -19,22 +17,18 @@ export function areSamePageTranslationOrigin(from: string, to: string): boolean 
   return fromScope !== null && fromScope === toScope
 }
 
-export function matchDomainPattern(url: string, pattern: string): boolean {
-  if (!z.url().safeParse(url).success) {
-    return false
+/**
+ * Hostname of an http(s) URL for analytics — no path, query, or fragment, so the
+ * event says which site was used without revealing which page.
+ */
+export function getAnalyticsSiteDomain(url: string | undefined): string | undefined {
+  if (!url) return undefined
+
+  try {
+    const urlObj = new URL(url)
+    if (urlObj.protocol !== "http:" && urlObj.protocol !== "https:") return undefined
+    return urlObj.hostname || undefined
+  } catch {
+    return undefined
   }
-
-  const urlObj = new URL(url)
-  const hostname = urlObj.hostname.toLowerCase()
-  const patternLower = pattern.toLowerCase().trim()
-
-  if (hostname === patternLower) {
-    return true
-  }
-
-  if (hostname.endsWith(`.${patternLower}`)) {
-    return true
-  }
-
-  return false
 }

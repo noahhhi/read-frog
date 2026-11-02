@@ -1,12 +1,15 @@
 name: Read Frog
-extName: Read Frog - 번역하고 배우기
-extDescription: Read Frog는 모든 웹사이트에서 언어를 깊이 있게 학습할 수 있도록 도와주는 오픈 소스 브라우저 확장 프로그램입니다.
+extName: "Read Frog - AI 이중 번역·동영상 자막·단어장"
+extDescription: "웹페이지와 YouTube·Netflix·X 동영상 자막을 AI로 이중 번역합니다. 모르는 단어는 저장해 플래시카드로 복습하세요."
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 account:
   login: 로그인
   webApp: 웹 앱
   logout: 로그아웃
   logoutError: 로그아웃하지 못했습니다. 다시 시도해 주세요.
+  grantAccess: 액세스 허용
+  grantAccessHint: readfrog.app 액세스 권한이 필요합니다
+  grantAccessError: 액세스 허용에 실패했습니다. 다시 시도해 주세요.
 dataTypes:
   string: 텍스트
   number: 숫자
@@ -54,6 +57,11 @@ popup:
     notification: Read Frog의 새로운 소식
   aiSmartContext: AI 스마트 컨텍스트
   aiSmartContextDescription: 웹페이지 컨텍스트를 사용하여 번역 품질을 향상시킵니다. LLM 번역 제공자가 필요합니다.
+  storeReview:
+    title: Read Frog 잘 쓰고 계신가요?
+    description: 스토어에 리뷰를 남기면 더 많은 사람이 찾을 수 있어요.
+    action: 리뷰 남기기
+    dismiss: 닫기
   more:
     title: 더보기
     help: 도움말
@@ -103,9 +111,11 @@ options:
     toggle: 사이드바 전환
     settings: 설정
     features: 기능
+    translation: 번역
     product: 제품
   tools:
     translationHub: 번역 허브
+    pdfTranslation: PDF 번역
   product:
     roadmap: 로드맵
   helpAndCommunity:
@@ -148,6 +158,8 @@ options:
       resetsAt: "$1에 초기화"
       daily: 일일 할당량
       weekly: 주간 할당량
+      oneTime: 보너스 할당량
+      expiresAt: "$1에 만료"
       features:
         pageTranslation: 페이지 번역
         customAction: 사용자 지정 AI 작업
@@ -157,13 +169,13 @@ options:
         inputTranslation: 입력 번역
         languageDetection: 언어 감지
     sponsorCta: 빠르고 가성비 좋은 AI 받기
-    sponsorCtaJalapenoCloud: GLM 5.2 50% 할인 받기
+    sponsorCtaJalapenoCloud: GLM 5.3 50% 할인 받기
     setApiKeyWarning:
       message: API 키는 $1 페이지에서 설정하세요
     badges:
       featureCount: $1 개 기능
       sponsor: 스폰서
-      sponsorJalapenoCloud: $$2 무료
+      sponsorJalapenoCloud: $$1 무료
     dialog:
       title: 새 제공업체 추가
       groups:
@@ -242,7 +254,7 @@ options:
         customChatComplete: 사용자 정의 Chat Complete
         customResponses: 사용자 정의 Responses
       attribution:
-        builtInAi: Read Frog가 호스팅하는 일반 모델입니다. Ultra가 아닌 사용자는 사용자 지정 AI 작업에서만 사용할 수 있으며, Ultra 사용자는 더 많은 기능에서 사용할 수 있습니다.
+        builtInAi: Read Frog가 호스팅하는 일반 모델입니다. Pro 및 Ultra 사용자는 주간 할당량 안에서 모든 기능에 사용할 수 있으며, 무료 플랜에서는 사용자 지정 AI 작업에서만 사용할 수 있습니다.
         builtInAiAdvance: Read Frog가 호스팅하는 고급 모델로, Ultra 멤버 전용입니다. 페이지 번역, 사용자 지정 AI 작업 등 모든 내장 AI 기능에서 사용할 수 있으며 주간 할당량을 공유합니다. 표준 모델보다 할당량이 더 빨리 소모됩니다.
       description:
         openai: GPT-4o 같은 모델을 제공합니다
@@ -271,7 +283,6 @@ options:
         cerebras: 빠른 번역과 텍스트 분석을 위한 초고속 AI 추론
         replicate: 전문적인 번역 작업을 위한 다양한 오픈소스 모델 액세스
         perplexity: 맥락적 번역과 읽기 지원을 위한 실시간 지식 강화 AI
-        vercel: 웹 콘텐츠 번역과 분석에 최적화된 AI 모델
         volcengine: ByteDance의 클라우드 AI 플랫폼, Doubao 모델 제공
         minimax: MiniMax AI 플랫폼, 고급 MiniMax-M2 모델 제공
         alibaba: 알리바바 클라우드의 Qwen 모델 시리즈, 고급 추론 및 다국어 기능 제공
@@ -290,6 +301,7 @@ options:
     featureProviders:
       title: 기능 제공업체
       description: 각 기능에 사용할 제공업체를 선택
+      chooseProvider: 제공업체 선택
       features:
         pageTranslation: 페이지 번역
         selectionTranslation: 선택 툴바 번역
@@ -298,7 +310,7 @@ options:
         noteSuggestion: 노트 제안
       descriptions:
         pageTranslation: 페이지 전체를 대역 또는 원문 대체 방식으로 번역합니다.
-        selectionTranslation: 선택 도구 모음에서 선택한 텍스트를 번역합니다.
+        selectionTranslation: "선택한 텍스트를 번역합니다. 단어 주석의 뜻에도 사용됩니다."
         inputTranslation: 입력창에 쓴 내용을 보내기 전에 번역합니다.
         videoSubtitles: 동영상 플레이어에 표시되는 자막을 번역합니다.
         noteSuggestion: 선택 번역 후 Notebase에 저장할 만한 단어를 제안합니다.
@@ -324,6 +336,8 @@ options:
       llmProviderNotConfigured: $1에 LLM 제공업체 미선택
   patterns:
     duplicate: 이 패턴은 이미 목록에 있습니다
+    gluedWildcard: '"*"는 주소의 한 구간 전체를 대신해야 합니다. 예: *.example.com, example.*'
+    unsupported: 이 주소는 일치시킬 수 없습니다. 포트와 http, https 이외의 스킴은 지원하지 않습니다.
   preference:
     title: 환경 설정
     pageDescription: Read Frog의 모양과 실행 범위, 설정 동기화 및 백업 방식을 지정하세요.
@@ -364,16 +378,17 @@ options:
       title: 설정
       googleDrive:
         title: Google Drive 클라우드 동기화
-        description: 원격이 최신이면 다운로드, 로컬이 최신이면 업로드
+        description: 원격이 최신이면 다운로드, 로컬이 최신이면 업로드. 용어집은 별도 파일로 오가며, 통째로 덮어쓰지 않고 항목별로 병합됩니다.
         sync: Google Drive 동기화
         syncing: 동기화 중...
         syncSuccess:
           uploaded: 로컬 설정이 클라우드에 업로드됨
           downloaded: 원격 설정이 적용됨
-          sameChanges: 로컬과 원격 변경 사항이 동일하여 동기화됨
-          noChange: 이미 동기화됨
-          unresolved: 충돌이 해결되고 로컬 및 클라우드에 동기화됨
-        syncError: 동기화 실패, 다시 시도해 주세요
+          sameChanges: 양쪽 설정 변경이 같아 동기화했습니다
+          noChange: 설정이 이미 동기화됨
+          unresolved: 설정 충돌을 해결하고 동기화했습니다
+        syncError: 설정 동기화 실패, 다시 시도해 주세요
+        accountChangedError: 대화 상자가 열려 있는 동안 로그인된 Google 계정이 바뀌었습니다. 아무것도 업로드하지 않았습니다. 다시 동기화하세요.
         metadataCorrupted: 동기화 메타데이터가 손상되어 원격 구성을 적용했습니다
         lastSyncTime: 마지막 동기화 시간
         logout: 로그아웃
@@ -409,14 +424,50 @@ options:
             title: 병합된 구성에 유효성 검사 오류가 있습니다
             description: "아래 차이점을 조정하여 수정하세요:"
           moreErrors: ...그리고 $1개의 오류가 더 있습니다
+        glossary:
+          thisDevice: 이 기기
+          cloud: 클라우드
+          deleted: 삭제됨
+          disabled: 사용 안 함
+          upToDate: 용어집이 이미 최신입니다
+          uploaded: 용어집을 클라우드에 업로드했습니다
+          merged: "용어집을 동기화했습니다: 추가 $1, 수정 $2, 삭제 $3"
+          undo: 실행 취소
+          undone: 용어집을 동기화 전 상태로 되돌렸습니다
+          undoUnavailable: 실행 취소를 더 이상 사용할 수 없습니다 — 이후 용어집이 변경되었습니다.
+          retry: 동기화 중에 용어집이 바뀌었습니다. 다시 실행해 주세요.
+          accountChangedRetry: 대화 상자가 열려 있는 동안 로그인된 Google 계정이 바뀌었습니다. 아무것도 업로드하지 않았습니다. 다시 동기화하세요.
+          busy: 다른 탭에서 용어집을 동기화하고 있습니다.
+          malformed: 클라우드의 용어집 파일을 읽을 수 없어 아무것도 변경하지 않았습니다.
+          versionTooNew: 해당 용어집 파일은 더 새로운 버전의 Read Frog가 저장한 것입니다. 먼저 확장 프로그램을 업데이트하세요.
+          duplicateFiles: 클라우드에 용어집 파일이 여러 개 있습니다. 아무것도 변경하지 않았으니 여분의 파일을 삭제해 주세요.
+          capExceeded: "병합하면 용어집 한도를 $1개 초과하므로 아무것도 변경하지 않았습니다."
+          failed: 용어집 동기화 실패
+          review:
+            title: 이번 용어집 동기화 확인
+            description: 두 사본이 다른 항목에 대해 무엇을 남길지 선택하세요.
+            firstSync: "이 기기의 첫 동기화: 클라우드에서 $1개, 업로드 $2개."
+            accountChanged: "현재 $1(으)로 로그인되어 있으며, 이 기기가 마지막으로 동기화한 계정과 다릅니다. 이 기기의 용어집 항목 $2개가 이 계정으로 업로드됩니다. 이 계정의 용어집만 쓰려면 취소하고, 이 기기의 용어집을 삭제한 뒤 다시 동기화하세요."
+            destructive: "이 동기화는 이 기기의 용어집 항목 $2개 중 $1개를 삭제합니다."
+            moreConflicts: "다른 $1 개의 차이는 목록에 없습니다. 모두 병합 결과를 따릅니다."
+            confirm: 동기화
+            cancel: 취소
       manualSync:
         title: 수동 설정 동기화
-        description: 수동으로 설정 가져오기 및 내보내기
+        description: 설정을 수동으로 가져오고 내보냅니다. 용어집도 함께 포함됩니다
         import: 가져오기
         export: 내보내기
         importSuccess: 설정 가져오기 완료
         exportSuccess: 설정 내보내기 완료
+        exportGlossaryFailed: 설정은 내보냈지만 용어집을 읽을 수 없어 파일에 포함되지 않았습니다.
         importError: 가져오기 실패
+        glossaryImported: "용어 $1개를 가져와 기존 용어집을 대체했습니다."
+        glossaryUndo: 실행 취소
+        glossaryUndone: 용어집을 가져오기 전 상태로 되돌렸습니다
+        glossaryUndoUnavailable: 실행 취소를 더 이상 사용할 수 없습니다 — 이후 용어집이 변경되었습니다.
+        glossaryMalformed: 그 파일의 용어집을 읽을 수 없습니다. 아무것도 변경하지 않았습니다.
+        glossaryVersionTooNew: 그 파일의 용어집은 더 새로운 버전의 Read Frog가 저장한 것입니다. 먼저 확장 프로그램을 업데이트하세요.
+        glossaryCapExceeded: "그 파일의 용어집 항목이 한도 $2개보다 $1개 많습니다. 아무것도 변경하지 않았습니다."
         exportOptions:
           title: 내보내기 옵션 선택
           description: 내보내는 설정에 API 키를 포함할지 선택하세요. API 키를 포함하면 민감한 정보가 유출될 수 있으므로 안전한 환경에서만 사용하는 것을 권장합니다.
@@ -455,13 +506,13 @@ options:
           confirm: 삭제
       reset:
         title: 기본 설정 복원
-        description: 모든 설정을 기본값으로 재설정
+        description: 모든 설정을 기본값으로 되돌립니다. 용어집은 영향을 받지 않습니다
         dialog:
           title: 기본 설정 복원
           trigger: 설정 초기화
           confirm: 확인
           cancel: 취소
-          description: 이 작업은 모든 사용자 지정 설정을 지우고 기본값으로 재설정합니다. 삭제하시겠습니까?
+          description: 이 작업은 모든 사용자 설정을 지우고 기본값으로 되돌립니다. 용어집은 유지됩니다 — 삭제하려면 용어집 페이지에서 진행하세요. 확인해 주세요.
     userExperience:
       title: 사용자 경험
       beta:
@@ -473,7 +524,7 @@ options:
         description: 버그를 찾고 UI 레이아웃을 다듬는 등 Read Frog 개선에 기여합니다
   shortcuts:
     title: 단축키
-    pageDescription: 읽는 중에 번역을 실행하는 키를 설정합니다.
+    pageDescription: 읽는 중에 번역, 읽기, AI 액션을 실행하는 키를 설정합니다.
     setShortcut: 단축키 설정
     pageTranslation:
       title: 페이지 번역
@@ -488,11 +539,25 @@ options:
       title: 자막 번역
       description: 동영상의 번역 자막을 켜거나 끕니다.
     nodeTranslation:
-      title: 단락 번역
+      title: 호버 번역
       description: 단락에 마우스를 올리거나 길게 누르면 그 단락만 번역합니다.
+      customDescription: 단락에 마우스를 올린 채 이 키를 누르면 그 단락을 번역합니다.
     translationHub:
       title: 번역 허브
       description: 번역 허브를 새 탭에서 엽니다.
+    selectionSpeak:
+      title: "선택 영역 읽기"
+      description: "선택한 텍스트를 소리 내어 읽습니다. 다시 누르면 멈춥니다."
+    selectionAnnotation:
+      title: "주석"
+      description: "선택한 텍스트에 밑줄을 긋고 줄 사이에 뜻을 표시합니다."
+    actions:
+      title: "AI 액션"
+      description: "선택한 텍스트에 AI 액션을 실행합니다. 커스텀 액션은 처음에 단축키가 없으니 여기서 설정하세요."
+    turnedOff: "이 기능이 꺼져 있어 다시 켤 때까지 이 키는 동작하지 않습니다."
+    turnOn: "켜기"
+    clash: "“$1”과(와) 같은 키입니다. 하나를 바꾸세요."
+    taken: "$1 키는 이미 “$2”에서 사용 중입니다."
   overlayTools:
     title: 오버레이 도구
   inputTranslation:
@@ -558,6 +623,14 @@ options:
     enable:
       title: 선택 툴바 활성화
       description: 웹 페이지에서 텍스트를 선택할 때 도구 모음을 표시하여 빠르게 번역, 읽기, AI 액션을 사용할 수 있습니다
+    annotation:
+      title: "단어 주석"
+      enable:
+        title: "사용"
+        description: "선택한 단어나 구에 밑줄을 긋고 줄 사이에 뜻을 적습니다"
+      provider:
+        title: "제공업체"
+        description: "뜻을 생성합니다. 「번역」과 같은 설정입니다"
     actions:
       title: 작업
       translate:
@@ -595,18 +668,33 @@ options:
       providerUnavailable: 선택한 제공업체를 사용할 수 없습니다
     customActions:
       title: 커스텀 AI 액션
-      pageDescription: 직접 만든 프롬프트를 선택 도구 모음에서 선택한 텍스트에 실행하세요.
+      pageDescription: 직접 만든 프롬프트를 선택 도구 모음에서 선택한 텍스트에 실행하세요. 생성된 결과의 데이터, 스타일, 인터랙션을 모두 직접 설정할 수 있습니다.
       description: 선택한 텍스트에 대한 구조화된 AI 작업을 직접 추가하세요
       configTitle: 액션 구성
+      introVideo:
+        trigger: "영상 보기"
+        title: "30초 만에 보는 커스텀 AI 액션"
       builtIn: 기본 제공
       add: AI 액션 추가
       edit: AI 액션 편집
       empty: 아직 커스텀 AI 액션이 없습니다
       noEnabledLlmProvider: 커스텀 AI 액션을 만들기 전에 최소 하나의 LLM 제공업체를 활성화하세요
+      tabs:
+        config: 구성
+        notebase: Notebase
+        hasErrors: 오류 있음
+        connected: 연결됨
+        needsAttention: 확인 필요
       form:
         name: 이름
         customize: 사용자 지정
         customizeTooltip: 기본 제공 작업의 프롬프트는 변경할 수 없습니다. 이 버튼을 클릭하여 편집 가능한 복사본을 만들고 프롬프트를 수정하세요.
+        aiConfigHelper:
+          trigger: "AI로 설정하기"
+          title: "AI로 설정하기"
+          description: "아래 프롬프트를 복사해 평소 쓰는 AI 어시스턴트(ChatGPT, Claude, DeepSeek, Kimi 등)에 붙여 넣으세요. 먼저 원하는 것을 물어본 다음, 각 항목에 무엇을 입력할지 알려 줍니다. 프롬프트에는 이 작업의 현재 설정이 포함되지만 API 키는 포함되지 않습니다."
+          copy: "프롬프트 복사"
+          copyFailed: "프롬프트를 복사하지 못했습니다. 다시 시도하세요."
         icon: 아이콘
         iconField:
           chooseAriaLabel: 아이콘 선택
@@ -628,12 +716,13 @@ options:
         fieldType: 필드 유형
         fieldDescription: 설명
         fieldDescriptionPlaceholder: 이 필드에 포함할 내용을 설명하세요...
-        fieldSpeaking: 음성 읽기 사용
         actions: 작업
         cancel: 취소
         save: 저장
         defaultFieldName: 결과
         fieldNamePlaceholder: 필드명
+        selectionField: "선택한 텍스트"
+        selectionFieldDescription: "선택한 텍스트를 그대로 저장합니다. AI가 작성하지 않습니다."
         autoFieldPrefix: 필드
         addFieldDialog:
           title: 출력 필드 추가
@@ -645,6 +734,69 @@ options:
           description: 이 출력 필드가 제거됩니다.
           confirm: 삭제
           cancel: 취소
+        layout:
+          title: 레이아웃
+          description: 팝업에서 결과가 표시되는 방식입니다. HTML과 Liquid로 작성하며, 응답이 스트리밍되는 동안 필드가 채워집니다.
+          reset: 기본값으로 복원
+          resetFieldList: 필드 목록
+          resetDictionary: 사전 카드
+          resetSentenceAnalysis: 문장 분석 카드
+          resetImproveWriting: "글쓰기 첨삭 카드"
+          resetConfirmTitle: 이 레이아웃을 바꿀까요?
+          resetConfirmDescription: 편집기의 내용이 바뀝니다. 이후에도 편집기에서 실행 취소할 수 있습니다.
+          resetConfirm: 바꾸기
+          edit: 편집
+          preview: 미리 보기
+          width: 너비
+          themeLight: 라이트
+          themeDark: 다크
+          replay: 다시 재생
+          sampleData: 샘플 데이터
+          sampleDataHint: 이 미리 보기에서만 사용되며 저장되지 않습니다.
+          sampleDataSavedHint: 이 미리 보기에서만 사용되며 이 작업과 함께 저장됩니다.
+          sampleDataReset: 샘플 초기화
+          sampleSelection: 선택한 텍스트
+          sampleTargetLanguage: 대상 언어
+          insertField: 필드
+          insertSpeak: 읽기 버튼
+          insertCondition: 값이 있을 때
+          insertContext: 컨텍스트
+          insertLoop: 모든 필드
+          syntaxHelp: 문법
+          builtInHint: 기본 제공 작업의 레이아웃은 편집할 수 없습니다. '사용자 지정'으로 사본을 만들어 편집하세요.
+          viewSource: 소스 보기
+          emptyNotice: 레이아웃이 비어 있어 팝업에 기본 필드 목록이 표시됩니다.
+          fallbackBanner: 이 레이아웃을 표시할 수 없어 기본 레이아웃을 대신 사용합니다. $1
+          sanitized: "안전을 위해 제거됨: $1"
+          unusedFields: "이 레이아웃에 없는 필드:"
+          tooLong: 레이아웃은 최대 $1자까지 가능합니다.
+          renameSkipped: 레이아웃이 아직 '$1'을(를) 참조합니다. 직접 수정하세요.
+          reservedName: "'ctx'와 'forloop'는 레이아웃 예약어입니다. 다른 이름을 선택하세요."
+          help:
+            output: 필드 값을 표시합니다. 값에 포함된 HTML은 이스케이프됩니다.
+            condition: 필드에 값이 있을 때만 내용을 표시합니다.
+            loop: 모든 필드에 대해 순서대로 반복합니다. f.name, f.value, f.type을 사용할 수 있습니다.
+            speak: data-speak가 있는 요소는 응답이 완료된 후 값(비어 있으면 요소 자신의 텍스트)을 읽어 줍니다.
+            speakLang: data-speak-lang에 언어 코드(es, en-US 등)를 지정하면 그 언어의 음성으로 읽어 줍니다. 지정하지 않으면 언어를 자동으로 감지하는데, 단어 하나는 잘못 감지되는 경우가 많습니다.
+            speakAutoplay: data-speak-autoplay가 있는 요소는 응답이 완료되면 자동으로 읽어 줍니다. 이런 요소가 여러 개면 첫 번째만 재생됩니다.
+            status: 상태별로 스타일을 지정합니다. 호스트의 data-status는 streaming, done, error 중 하나입니다.
+            filters: newline_to_br는 줄바꿈을 유지하고(마지막에 사용), lines는 텍스트를 줄 목록으로 나눕니다.
+            styles: <style> 블록의 CSS는 이 결과 안에서만 적용됩니다. --rf-* 색상은 라이트/다크 테마를 따릅니다.
+          lint:
+            parseError: "Liquid 문법 오류: $1"
+            unknownField: 이름이 '$1'인 필드가 없습니다.
+            unknownContextKey: "ctx에 '$1'이(가) 없습니다. 사용 가능: $2."
+            fieldShadowedByLocal: 이 레이아웃에서 '$1'에 값을 할당하므로 같은 이름의 필드가 가려집니다.
+            liquidInStyle: <style> 안에서는 Liquid가 실행되지 않고 일반 텍스트로 남습니다.
+            styleInConditional: <style> 블록은 '$1' 태그 안에 있어도 항상 적용됩니다.
+            cssImport: "@import는 제거됩니다. 레이아웃은 외부 스타일을 불러올 수 없습니다."
+            cssFontFace: "@font-face는 제거됩니다. 기기에 있는 글꼴을 사용하세요."
+            unquotedAttributeOutput: 이 속성 값을 따옴표로 감싸세요. 그렇지 않으면 값이 속성 밖으로 벗어날 수 있습니다.
+            filterIgnored: "'$1' 태그에서는 필터가 무시됩니다. 먼저 필터를 적용한 값을 할당하세요."
+            newlineToBrNotLast: newline_to_br는 출력의 마지막 필터일 때만 동작합니다.
+            tooLong: 이 레이아웃은 $1자를 넘어 저장할 수 없습니다.
+            fieldNotShown: "'$1'은(는) 이 레이아웃에 표시되지 않습니다."
+            reservedFieldName: 필드 이름 '$1'은(는) 레이아웃 예약어입니다. 필드 이름을 바꾸세요.
         notebase:
           title: Notebase 연결
           description: 이 액션의 구조화된 결과를 원격 Notebase에 저장합니다.
@@ -676,16 +828,16 @@ options:
           schemaErrorDescription: 잠시 후 다시 새로고침해 보세요.
           schemaLoading: notebase 스키마를 불러오는 중...
           mappingsLabel: 필드 매핑
-          mappingsEmpty: 아직 매핑이 없습니다. 필드를 저장할 준비가 되면 추가하세요.
-          addMappingAction: 매핑 추가
-          removeMappingAction: 매핑 제거
           localFieldLabel: 액션 필드
-          localFieldPlaceholder: 액션 필드 선택
           remoteFieldLabel: Notebase 필드
-          remoteFieldPlaceholder: notebase 필드 선택
           columnUnavailableOption: 삭제됨
           invalidMappingsTitle: 일부 매핑을 확인해야 합니다
           invalidMappingsDescription: 잘못된 매핑은 유지됩니다. Notebase에 저장하기 전에 수정하세요.
+          noFieldSavedTitle: "이 Notebase에 저장되는 필드가 없습니다"
+          noFieldSavedDescription: "노트를 저장하려면 하나 이상의 필드에 Notebase 필드를 고르세요."
+          mappingSummary: "저장 $1 · 저장 안 함 $2 · 미정 $3"
+          skipFieldOption: "저장 안 함"
+          undecidedFieldPlaceholder: "Notebase 필드를 고르거나 저장 안 함"
           mappingMissingLocal: 매핑된 액션 필드가 더 이상 존재하지 않습니다.
           mappingMissingRemote: 매핑된 notebase 필드가 더 이상 존재하지 않습니다.
           mappingMissingSchema: 이 매핑을 검증하려면 notebase 스키마를 새로고침하세요.
@@ -695,6 +847,7 @@ options:
           paragraphs: 선택 영역과 겹치는 문단 내용을 빈 줄로 이어 붙인 값이며, 사용자 정의 AI 액션에 전달될 때는 앞의 2000자로 잘립니다
           targetLanguage: 사용자의 대상 언어
           webTitle: 웹페이지 제목
+          webUrl: 현재 페이지의 전체 URL
           webContent: 현재 페이지에서 추출한 웹페이지 본문(앞의 2000자로 잘린 버전)
         delete: 삭제
         deleteDialog:
@@ -702,6 +855,194 @@ options:
           description: 이 작업은 취소할 수 없습니다.
           confirm: 삭제
           cancel: 취소
+      templates:
+        dictionary:
+          name: "사전"
+          description: "뜻, 발음, 문단 번역과 함께 단어 찾기"
+          systemPrompt: |-
+            당신은 언어 학습자를 위한 사전 도우미입니다.
+
+            ## 목표
+            주어진 표제어와 주변 문단을 바탕으로, 요구된 출력 객체에 맞는 간결한 사전 항목을 작성하세요.
+
+            ## 규칙
+            1. 제공된 문단에 가장 잘 맞는 의미에 집중하세요.
+            2. 표제어는 기본형(원형)으로 정규화하세요.
+            3. 뜻은 정확하고 학습자가 이해하기 쉽게 쓰세요.
+            4. 예문에는 제공된 문단에서 선택한 표제어가 들어 있는 완전한 한 문장만 추출하세요. 앞뒤 문장은 포함하지 마세요.
+            5. 예문 번역은 추출한 예문만 번역하세요.
+            6. 발음은 해당 언어의 표준 표기법을 사용하세요(예: 영어는 IPA, 중국어는 병음, 일본어는 로마자).
+            7. 품사는 영어로 쓰세요(noun, verb, adjective 등).
+            8. 난이도는 CEFR 등급(A1, A2, B1, B2, C1, C2) 중 하나여야 합니다.
+            9. 알 수 없는 항목은 추측하지 말고 빈 문자열을 반환하세요.
+            10. 원문 형태가 필요한 경우를 제외하고 모든 텍스트 항목은 {{targetLanguage}}(으)로 답하세요.
+            11. 예문 속 형태는 선택한 표제어가 예문의 어디에 있는지 표시합니다. {"text": ...} 항목으로 이루어진 간결한 JSON 배열을 담은 문자열이며, 각 항목은 예문을 한 글자도 바꾸지 않고 그대로 인용합니다. 예: [{"text":"blossoms"}]. 예문에서 표제어가 여러 부분으로 나뉘어 있으면(예: "Er ruft seine Mutter an"의 "anrufen") 부분마다 순서대로 한 항목씩 쓰세요: [{"text":"ruft"},{"text":"an"}]. 안쪽 따옴표는 올바르게 이스케이프하세요.
+            12. 암기 팁은 좋은 선생님이 이 단어에 맞춰 가르치듯, 학습자가 선택된 단어 자체(번역어가 아닌 원래 언어의 단어)를 기억하도록 돕습니다. 팁은 최대 3개, 한 줄에 하나씩, 가장 도움이 되는 것부터 쓰세요. 정말 도움이 되는 팁만 쓰고, 약한 팁을 더하느니 적은 편이 낫습니다. 정말 도움이 되는 것이 없으면 억지로 만들지 말고 빈 문자열을 반환하세요. 각 줄은 한 가지 기법만 다루며, 기법 이름과 콜론으로 시작합니다. 기법 이름과 내용은 모두 {{targetLanguage}}(으)로 쓰세요. 먼저 단어의 구성에서 출발하고, 그다음 정말 도움이 되는 것을 더하세요:
+               - 단어 구성: 의미를 가진 부분(어근, 접두사, 접미사, 또는 합성어를 이루는 단어)과 그것들이 어떻게 합쳐져 뜻이 되는지.
+               - 한자: 한자로 쓰는 단어(중국어, 일본어 한자어, 한자에서 온 한국어 단어)라면 각 글자의 뜻, 또는 한 글자의 구성 요소.
+               - 어원: 단어의 유래, 또는 학습자가 알 만한 관련어(같은 어원의 단어, 외래어, 다른 언어에서 같은 한자로 쓰는 단어).
+               - 유의어 / 반의어: 유의어와 그 차이, 또는 반의어.
+               - 헷갈리는 단어: 형태나 소리가 비슷한 단어와 구별하는 법.
+               - 연어: 함께 자주 쓰여 한 덩어리로 외울 만한 표현.
+               맞지 않는 기법은 건너뛰고, 해당 없다고 쓰는 줄은 만들지 마세요. 모든 팁은 뜻에 없는 내용을 알려 주어야 합니다. 뜻을 다른 말로 반복하거나, 예문을 다시 말하거나, 활용형을 설명하지 마세요. 확실한 사실만 쓰세요. 어원, 어근, 한자 구성 요소를 지어내지 마세요. 논란이 있거나 속설인 어원 이야기는 ‘재미로 외우는 법’이라고 해도 쓰지 마세요(sincere는 ‘밀랍 없이’에서 온 말이 아니고, posh도 머리글자어가 아닙니다). 부분이나 글자로 나누는 것은 그것들이 실제로 뜻을 이룰 때만 하세요. ‘犹豫’, ‘葡萄’처럼 글자로 나눠도 뜻이 되지 않는 단어에는 다른 기법을 쓰세요. 어떤 언어로든 발음이 비슷한 말장난을 쓰지 말고, 단어를 상관없는 단어로 쪼개지도 마세요.
+
+            ## 예시
+
+            ### 예시 1
+            입력: 선택 텍스트="blossoms", 문단="Spring arrives quietly in the park. The ephemeral beauty of cherry blossoms reminds us to cherish each moment. Families and friends gather beneath the trees.", 대상 언어=중국어
+
+            출력:
+            - 표제어: blossom
+            - 발음: /ˈblɒs.əm/
+            - 품사: noun
+            - 예문: The ephemeral beauty of cherry blossoms reminds us to cherish each moment.
+            - 예문 속 형태: [{"text":"blossoms"}]
+            - 뜻: 花；花朵（尤指果树的花）
+            - 예문 번역: 樱花短暂的美丽提醒我们珍惜每一刻。
+            - 암기 팁:
+              词源：和 bloom（开花）同源，bl- 开头的 bloom、blossom 都和开花有关
+              近义词：bloom 多指花开的状态，blossom 常指果树（樱桃、苹果）的花
+            - 난이도: B2
+
+            ### 예시 2
+            입력: 선택 텍스트="感動", 문단="この映画はつまらないと思ったけど、最後は感動した。", 대상 언어=영어
+
+            출력:
+            - 표제어: 感動
+            - 발음: kandou
+            - 품사: noun
+            - 예문: この映画はつまらないと思ったけど、最後は感動した。
+            - 예문 속 형태: [{"text":"感動"}]
+            - 뜻: Being deeply moved; emotional touch
+            - 예문 번역: I thought this movie was boring, but the ending was moving.
+            - 암기 팁:
+              Characters: 感 (feel) + 動 (move): your feelings are moved.
+              Collocation: 感動する = to be moved; 感動的 = moving, touching.
+            - 난이도: B1
+          prompt: |-
+            ## 입력
+            선택 텍스트: {{selection}}
+            문단: {{paragraphs}}
+            대상 언어: {{targetLanguage}}
+          fieldTerm: "표제어"
+          fieldTermDescription: "선택한 표제어의 기본형(원형)."
+          fieldPhonetic: "발음"
+          fieldPhoneticDescription: "해당 언어의 표준 발음 표기(예: 영어는 IPA, 중국어는 병음, 일본어는 로마자)."
+          fieldPartOfSpeech: "품사"
+          fieldPartOfSpeechDescription: "문법 범주(예: noun, verb, adjective)."
+          fieldSentence: "예문"
+          fieldSentenceDescription: "위 문단에서 선택한 표제어가 들어 있는 완전한 한 문장. 앞뒤 문장은 포함하지 마세요."
+          fieldSentenceTerm: "예문 속 형태"
+          fieldSentenceTermDescription: '예문에서 선택한 표제어의 위치: 문자열로 직렬화된 JSON 배열로, 표제어의 부분마다 {"text": 문자열} 항목 하나이며 각각 예문을 그대로 인용합니다(예: [{"text":"blossoms"}]).'
+          fieldDefinition: "뜻"
+          fieldDefinitionDescription: "문맥상 의미에 대한 간결한 정의 하나."
+          fieldSentenceTranslation: "예문 번역"
+          fieldSentenceTranslationDescription: "예문만 번역한 것."
+          fieldMemoryTips: "암기 팁"
+          fieldMemoryTipsDescription: "단어를 기억하는 방법: 최대 3개, 한 줄에 하나씩, 각각 기법 이름과 콜론으로 시작합니다(예: 단어 구성: …). 정말 도움이 되는 것이 없으면 빈 문자열."
+          fieldDifficulty: "난이도"
+          fieldDifficultyDescription: "추정 CEFR 난이도: A1, A2, B1, B2, C1 또는 C2."
+        sentenceAnalysis:
+          name: "문장 구조 분석"
+          description: "긴 문장을 선생님처럼 표시해 뼈대, 절, 어려운 부분을 한눈에 보여 줍니다"
+          fieldSentence: "원문"
+          fieldAnnotations: "주석"
+          fieldTranslation: "번역"
+          roles:
+            subject: "주어"
+            predicate: "서술어"
+            object: "목적어"
+            complement: "보어"
+            attributive: "수식어"
+            adverbial: "부사어"
+            appositive: "동격어"
+            connector: "접속사"
+          clauses:
+            subject: "주어절"
+            object: "목적어절"
+            complement: "보어절"
+            attributive: "관계사절"
+            adverbial: "부사절"
+            appositive: "동격절"
+            clause: "절"
+          adverbialClauses:
+            time: "시간 부사절"
+            place: "장소 부사절"
+            cause: "이유 부사절"
+            condition: "조건 부사절"
+            concession: "양보 부사절"
+            purpose: "목적 부사절"
+            result: "결과 부사절"
+            manner: "방법 부사절"
+            comparison: "비교 부사절"
+          forms:
+            infinitive: "to부정사"
+            gerund: "동명사"
+            presentParticiple: "현재분사"
+            pastParticiple: "과거분사"
+          senses:
+            time: "시간"
+            place: "장소"
+            cause: "이유"
+            condition: "조건"
+            concession: "양보"
+            purpose: "목적"
+            result: "결과"
+            manner: "방법"
+            comparison: "비교"
+          obstacles:
+            inversion: "도치"
+            fronting: "전치"
+            ellipsis: "생략"
+            passive: "수동태"
+            subjunctive: "가정법"
+            parenthesis: "삽입"
+            dummyIt: "가주어"
+            postponedSubject: "진주어"
+            cleft: "강조구문"
+            comparison: "비교"
+            negation: "부정"
+            split: "분리"
+            idiom: "관용구"
+          restoreLabel: "원래 어순:"
+          hardLabel: "어려움"
+          trunkLabel: "뼈대만"
+          slashesLabel: "끊어 읽기"
+        improveWriting:
+          name: "글쓰기 첨삭"
+          description: "선생님처럼 첨삭해요: 틀린 곳과 어색한 표현을 표시하고 상황에 맞게 고쳐 줍니다"
+          fieldOriginal: "원래 글"
+          fieldSetting: "상황"
+          fieldAnnotations: "첨삭"
+          fieldImproved: "고친 글"
+          fieldSummary: "총평"
+          types:
+            spelling: "맞춤법"
+            grammar: "문법"
+            punctuation: "문장 부호"
+            wordChoice: "어휘"
+            logic: "논리"
+            unnatural: "부자연스러움"
+            register: "격식"
+            clarity: "명확성"
+            good: "좋은 표현"
+          tiers:
+            error: "오류"
+            awkward: "어색함"
+            good: "좋은 표현"
+          hideFixesLabel: "정답 숨기기"
+          hiddenHintLabel: "먼저 직접 고쳐 보세요."
+          showImprovedLabel: "고친 글 보기"
+          improvedLabel: "고친 글"
+          copyLabel: "복사"
+          unchangedLabel: "고칠 곳이 없어요"
+          removeLabel: "삭제"
+        blank:
+          prompt: |-
+            ## 입력
+            선택 텍스트: {{selection}}
+            문단: {{paragraphs}}
+            대상 언어: {{targetLanguage}}
       errors:
         nameRequired: 이름은 필수입니다
         duplicateName: '중복된 액션 이름 "$1"'
@@ -710,6 +1051,115 @@ options:
         outputSchemaRequired: 최소 하나의 출력 필드를 추가하세요
         fieldKeyRequired: 필드 이름은 필수입니다
         duplicateFieldKey: 필드 이름은 고유해야 합니다
+  advanced:
+    title: 고급
+    pageDescription: 자주 쓰지는 않지만 강력한 설정입니다.
+    glossary:
+      title: 용어집
+      pageDescription: 중요한 단어에 고정된 번역을 지정하고, 각 목록이 적용될 곳을 선택하세요.
+      untitled: 제목 없는 용어집
+      noGlossaries: 아직 용어집이 없습니다.
+      enable:
+        title: 사용
+        description: 일치하는 용어를 LLM에 함께 전달해 원하는 표현으로 번역하게 합니다. 용어집은 프롬프트에 담겨 전달되므로, LLM 제공업체로 실행되는 기능에만 적용됩니다.
+      library:
+        title: 내 용어집
+        description: 용어집마다 고유한 용어와 웹사이트 목록이 있으므로, 업무용 용어 모음이 다른 모든 곳까지 따라오지 않습니다.
+        button: 용어집 추가
+        capReached: "용어집은 최대 $1개까지 만들 수 있습니다."
+        termUsage: "모든 용어집을 통틀어 $2개 용어 중 $1개 사용 중"
+      summary:
+        terms: "$1개 용어"
+        termsOne: 1개 용어
+        allSites: 모든 웹사이트
+        sites: "$1개 웹사이트"
+        sitesOne: 1개 웹사이트
+      editor:
+        docsLink: 어떻게 작동하나요?
+        sections:
+          terms: 용어
+          maintenance: 백업과 삭제
+        details:
+          title: 이름과 설명
+          descriptionPlaceholder: 설명 (선택 사항)
+        enable:
+          title: 사용
+          description: 사용하지 않는 용어집은 용어를 그대로 보관하지만 아무것도 전달하지 않습니다.
+        sites:
+          title: 웹사이트
+          description: 이 용어집을 특정 웹사이트에만 적용합니다. example.com은 그 주소만, *.example.com은 하위 도메인까지, example.com/docs/*는 사이트의 한 부분만 포함합니다.
+          allSites: 비워 두면 용어집이 모든 곳에 적용됩니다.
+          header: 웹사이트
+        delete:
+          title: 이 용어집 삭제
+          description: 용어집과 그 안의 모든 용어를 삭제합니다. 나중에 용어가 다시 필요할 수 있다면 먼저 내보내세요. 삭제는 되돌릴 수 없습니다.
+          dialog:
+            trigger: 삭제
+            title: 이 용어집을 삭제할까요?
+            description: "용어집과 그 안의 용어 $1개가 모두 영구히 삭제됩니다. 이 작업은 되돌릴 수 없습니다."
+            confirm: 삭제
+            cancel: 취소
+      addTerm:
+        title: 용어 추가
+        description: 용어에 원하는 번역을 지정하거나, 번역을 비워 두면 원문을 그대로 유지합니다.
+      list:
+        title: 내 용어
+        description: 문단에 나타난 용어만 해당 문단과 함께 전달됩니다.
+      importExport:
+        title: 가져오기와 내보내기
+        description: 용어는 source, target, targetLanguage, caseSensitive 네 개 열로 이루어진 CSV입니다. 내보내기가 만드는 형식과 같습니다.
+      sourcePlaceholder: 용어
+      targetPlaceholder: 번역 (비워 두면 원문 유지)
+      caseSensitive: 대소문자 구분
+      add: 추가
+      searchPlaceholder: 용어 검색
+      columnEnabled: 사용
+      columnSource: 용어
+      columnTarget: 번역
+      columnTargetLanguage: 대상 언어
+      allLanguages: 모든 언어
+      toggleTerm: "'$1' 사용"
+      editTerm: "'$1' 편집"
+      keepOriginal: 원문 유지
+      delete: 삭제
+      save: 저장
+      cancel: 취소
+      loading: 불러오는 중...
+      empty: 아직 용어가 없습니다. 위에서 추가하거나 CSV 파일을 가져오세요.
+      noMatches: 검색과 일치하는 용어가 없습니다.
+      previous: 이전
+      next: 다음
+      pageOf: "$1 / $2"
+      addError:
+        emptySource: 먼저 용어를 입력하세요.
+        tooLong: 용어가 너무 깁니다.
+        capReached: "모든 용어집을 통틀어 용어 수가 한도인 $1개에 도달했습니다."
+        duplicate: 이미 용어집에 있는 용어입니다.
+      import: 가져오기
+      export: 내보내기
+      importModeMerge: 목록에 추가
+      importModeReplace: 목록 교체
+      importEmpty: 해당 파일에서 용어를 찾을 수 없습니다.
+      importMissingHeader: "이 파일은 Read Frog 용어집 내보내기 파일이 아닙니다. 다음 열이 필요합니다:"
+      importOverflow: "이 가져오기는 한도를 $1개 초과합니다. 아무것도 변경되지 않았습니다."
+      importSuccess: "$1개를 새로 가져오고 $2개를 업데이트했습니다."
+      importSkipped: "잘못된 행 $1개와 중복 $2개를 건너뛰었습니다."
+      importNoValidRows: 해당 행을 하나도 가져올 수 없습니다. 변경된 내용이 없습니다.
+      importReplaceConfirm:
+        title: 목록 전체를 교체할까요?
+        description: "이 용어집의 $1개 용어가 모두 삭제되고(선택한 언어뿐 아니라 모든 대상 언어) 이 파일의 내용으로 교체됩니다. 이 작업은 되돌릴 수 없습니다."
+        confirm: 교체
+        cancel: 취소
+      deleteAll:
+        title: 모든 용어 삭제
+        description: 용어집을 비웁니다. 나중에 다시 필요할 수 있다면 먼저 내보내세요. 삭제는 되돌릴 수 없습니다.
+        deleting: 삭제하는 중...
+        dialog:
+          title: 모든 용어 삭제
+          trigger: 모두 삭제
+          confirm: 확인
+          cancel: 취소
+          description: "$1개의 용어가 모두 영구히 삭제됩니다. 이 작업은 되돌릴 수 없습니다."
   contextMenu:
     title: 컨텍스트 메뉴
     pageDescription: 브라우저 우클릭 메뉴에 표시되는 Read Frog 항목을 설정하세요.
@@ -736,6 +1186,9 @@ options:
         range:
           main: 주요 내용
           all: 전체 내용
+      translateTitle:
+        title: 탭 제목 번역
+        description: 페이지를 번역할 때 브라우저 탭에 표시되는 제목도 번역합니다. 끄면 원래 제목이 유지됩니다.
     hoverTranslation:
       title: 호버 번역
       enable:
@@ -790,6 +1243,8 @@ options:
       managePrompts: 프롬프트 관리
       communityPrompts: 커뮤니티에서 프롬프트 가져오기 또는 공유
       communityPromptsUrl: https://github.com/mengxi-ream/read-frog/discussions/821
+      variableReference: 변수 레퍼런스
+      variableReferenceUrl: https://readfrog.app/ko/docs/page-translation/prompts/variables
       addPrompt: 프롬프트 추가
       default: 기본
       builtIn: 기본 제공
@@ -953,13 +1408,16 @@ options:
       title: 기본 설정
       enable:
         title: 비디오 자막 켜기
-        description: 동영상 플레이어 컨트롤 바에 번역 버튼을 추가합니다. 현재는 YouTube만 지원합니다.
+        description: YouTube, X, Netflix의 동영상 플레이어 컨트롤 바에 번역 버튼을 추가합니다.
       autoStart:
         title: 영상을 열면 바로 번역
         description: 영상이 로드되면 버튼을 누르지 않아도 자막 번역을 시작합니다.
       aiSegmentation:
         title: AI 스마트 분할
-        description: AI가 자막을 문장처럼 읽히도록 다시 나눕니다. 타이밍도 AI가 정하므로 싱크가 어긋날 수 있습니다. LLM 번역 공급자가 필요합니다.
+        description: AI가 자막을 문장 단위로 다시 나눕니다. 번역 응답이 느려집니다. 성능 좋은 LLM이 필요하며, 약한 모델은 줄이 빠지거나 어긋날 수 있습니다.
+      wordLookupAction:
+        title: 단어 조회 액션
+        description: 자막의 단어를 클릭했을 때 실행할 AI 액션입니다. 기본은 사전이며 직접 만든 액션으로 바꿀 수 있습니다.
     aiQuota:
       title: AI 자막 사용량
       description: AI 음성 인식으로 모든 동영상에 정확한 자막을 만들어 줍니다
@@ -1069,6 +1527,9 @@ options:
           description: 모든 캐시된 AI 분할 결과가 삭제됩니다. 다음에 AI 분할이 활성화된 비디오를 재생하면 자막이 다시 처리됩니다.
   whatsNew:
     title: 새로운 기능
+    postType:
+      promotion: 프로모션
+      update: 업데이트
   rateUs:
     title: 리뷰 남기기
   configMigration:
@@ -1109,7 +1570,22 @@ translation:
   sameLanguage: 원본 언어와 대상 언어는 달라야 합니다
   autoModeSameLanguage: 감지된 언어 '$1'은(는) 대상 언어와 같습니다
   extensionContextInvalidated: 확장 프로그램이 업데이트되었습니다. 이 페이지를 새로고침한 후 다시 시도하세요.
+annotation:
+  annotate: "주석 달기"
+  enterMode: "주석 모드"
+  exitMode: "주석 모드 종료"
+  modeLabel: "주석 모드"
+  noTextSelected: "선택된 텍스트가 없습니다"
+  tooLong: "주석을 달려면 단어나 짧은 구를 선택하세요"
+  multipleParagraphs: "주석을 달려면 한 문단 안의 텍스트를 선택하세요"
+  translatedTextUnsupported: "번역문에는 주석을 달 수 없습니다"
+  unsupportedPlace: "이 텍스트에는 주석을 달 수 없습니다"
+  markOnly: "표시했습니다. 이 줄 사이에는 뜻을 넣을 공간이 없습니다."
+  failed: "뜻을 가져오지 못했습니다"
+  remove: "주석 삭제"
 speak:
+  languageDetectionFallback: 로컬 언어 감지로 전환했습니다
+  languageDetectionSettingsHint: 설정에서 사용 가능한 LLM을 선택하거나 로컬 감지로 바꾸세요.
   fetchingAudio: 오디오 생성 중...
   playingAudio: 오디오 재생 중...
   failedToGenerateSpeech: 음성 생성 실패
@@ -1122,6 +1598,7 @@ action:
   regenerate: 다시 생성
   viewContextDetails: 컨텍스트
   customizeCustomAction: $1 작업 맞춤 설정
+  customActionLayoutFallback: 이 결과를 레이아웃으로 표시할 수 없어 간단한 보기로 표시합니다.
   saveToNotebase: Notebase에 저장
   saveToNotebaseSaving: 저장 중...
   saveToNotebaseSuccess: Notebase에 저장했습니다
@@ -1131,6 +1608,10 @@ action:
   saveToNotebaseLimitExceeded: 더 많은 Notebase 노트를 저장하려면 업그레이드가 필요합니다
   saveToNotebaseTableUnavailable: 선택한 Notebase를 더 이상 사용할 수 없습니다
   saveToNotebaseConnectionInvalid: 현재 Notebase 연결이 오래되었습니다. Custom AI Actions에서 새로고침하고 매핑을 수정하세요.
+  saveToNotebaseInvalidContent: "AI 응답에 형식이 맞지 않는 값이 있어 저장하지 않았습니다. 다시 실행한 뒤 저장하세요."
+  saveToNotebaseNoFieldSaved: "저장하지 않았습니다: 이 작업에는 Notebase에 저장할 필드가 없습니다. 설정에서 하나 이상 고르세요."
+  saveToNotebaseUndecidedTitle: "저장했습니다. 다음 필드는 저장할지 아직 정하지 않았습니다"
+  saveToNotebaseSkipUndecided: "모두 저장 안 함"
   saveToNotebaseNoMappings: 저장하기 전에 유효한 매핑을 하나 이상 추가하세요
   saveToNotebaseCreateTitle: Notebase를 만들까요?
   saveToNotebaseCreateDescription: 이 Custom Action 출력 필드와 일치하는 열로 새 Notebase를 만들고, 현재 결과를 첫 노트로 저장합니다.
@@ -1152,11 +1633,18 @@ action:
   updatePayment: 결제 수단 업데이트
   openCustomActions: Custom AI Actions 열기
   openNotebase: Notebase 열기
+  reviewDueOne: "복습할 카드 $1장"
+  reviewDueOther: "복습할 카드 $1장"
   contextDetailsTitleLabel: 제목
   contextDetailsParagraphsLabel: 문단 내용
   translation: 번역
   speak: 읽기
   playing: 재생 중
+  moreActions: 더 보기
+  pinToToolbar: 도구 모음에 고정
+  unpinFromToolbar: 도구 모음에서 고정 해제
+  dragToReorder: 드래그하여 순서 변경
+  addCustomAction: 커스텀 AI 액션 추가
 noteSuggestion:
   title: 저장 추천
   description: Notebase에 저장할 단어를 선택하고 언제든지 복습하세요.
@@ -1173,24 +1661,33 @@ shortcutKeySelector:
   placeholder: 단축키를 입력해 주세요
 subtitles:
   sidebar:
-    close: AI 요약 닫기
+    close: 학습 패널 닫기
+    needsSubtitles: 이 동영상에는 자막이 없습니다. 먼저 AI 자막을 생성해 보세요.
     menu:
-      label: AI 요약
+      label: 학습
     summary:
+      tab: AI 요약
       generating: 요약을 생성하는 중…
       failedTitle: 생성하지 못했습니다
       retry: 다시 시도
       needsModel: 이 동영상을 요약하려면 자막에 사용할 LLM 모델을 선택하세요.
       openSettings: 설정 열기
-      needsSubtitles: 이 동영상에는 자막이 없습니다. 먼저 AI 자막을 생성해 보세요.
+    transcript:
+      tab: 자막
+      failedTitle: 자막을 불러오지 못했습니다
+      retry: 다시 시도
+      emptyTitle: 표시할 자막이 없습니다
+      backToCurrent: 현재 위치로
   loadingAiSubtitles: AI 자막 불러오는 중… (예상 3분)
   aiSubtitlesHint: 첨단 AI 음성 인식으로 정확한 자막을 생성하며, 공식 자막이 없어도 사용할 수 있습니다.
   requestAiSubtitles: AI 자막 요청
   usingAiSubtitles: AI 자막 사용 중
+  settings: 자막 설정
   toggle:
     enabled: 자막 번역을 켰습니다
     disabled: 자막 번역을 껐습니다
   actions:
+    download: 자막 다운로드
     downloadTranslated: 번역 자막 다운로드
     downloadTranslatedPreparing: 자막 준비 중, 긴 동영상은 시간이 더 걸릴 수 있습니다
     downloadTranslatedTranslating: 자막 번역 중
@@ -1208,9 +1705,10 @@ subtitles:
     httpUnknown: HTTP 오류 $1
     invalidResponse: 유튜브 자막 응답 형식이 잘못되었습니다
     networkError: 자막을 가져오는 도중 네트워크 오류가 발생했습니다
-    fetchSubTimeout: 유튜브 자막 가져오기 시간이 초과되었습니다
+    fetchSubTimeout: 자막 가져오기 시간이 초과되었습니다
     buttonNotFound: 자막 버튼을 찾을 수 없습니다
     noSubtitlesFound: 현재 영상에 자막이 없습니다
+    trackFileNotLoaded: 자막을 불러오지 못했습니다. 페이지를 새로고침해 보세요
     videoNotFound: 비디오 요소를 찾을 수 없습니다
     controlsBarNotFound: 컨트롤 바를 찾을 수 없습니다
     aiRateLimited: 요청이 너무 많습니다. 나중에 다시 시도해 주세요
@@ -1230,11 +1728,13 @@ subtitles:
     translatedExportIncomplete: 모든 자막 줄을 번역하지 못했습니다
     translatedExportSameLanguage: 원본 언어와 대상 언어가 같습니다
 hostedAi:
-  ultraBadge:
-    tooltip: Ultra 요금제 가입이 필요합니다 · 배지를 클릭해 요금제 받기
+  planBadge:
+    pro: Pro 또는 Ultra 요금제 가입이 필요합니다 · 배지를 클릭해 요금제 받기
+    ultra: Ultra 요금제 가입이 필요합니다 · 배지를 클릭해 요금제 받기
   availability:
     authenticationRequired: 로그인 후 사용할 수 있습니다
     ultraRequired: Ultra 요금제가 필요합니다
+    proRequired: Pro 또는 Ultra 요금제가 필요합니다
     quotaExhausted: 할당량을 모두 사용했습니다
     serviceUnavailable: 일시적으로 사용할 수 없습니다
     usedPercent: "할당량 사용: $1%"
@@ -1249,6 +1749,7 @@ hotkey:
   shift: Shift
   backtick: 백틱
   clickAndHold: 클릭하고 길게 누르기
+  custom: 사용자 지정 단축키
 translationHub:
   searchLanguages: 언어 검색...
   noLanguagesFound: 언어를 찾을 수 없습니다
@@ -1260,6 +1761,8 @@ translationHub:
   translate: 번역
   copiedToClipboard: 번역이 클립보드에 복사되었습니다!
   copyTranslation: 번역 복사
+  speakSourceText: 원문 읽어주기
+  speakTranslation: 번역문 읽어주기
   expandCard: 카드 펼치기
   collapseCard: 카드 접기
   expandAllCards: 모두 펼치기

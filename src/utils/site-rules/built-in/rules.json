@@ -39,7 +39,7 @@
   },
   {
     "id": "readfrog-atom-defaults",
-    "description": "Keep rendered inline formulas as opaque atoms inside bilingual translations",
+    "description": "Keep rendered inline formulas and LaTeXML inline code as opaque atoms inside translations",
     "matches": "*",
     "atomSelectors": [
       "span.katex",
@@ -53,6 +53,7 @@
       "[aria-labelledby^=\"MathJax-SVG\"]",
       ".mwe-math-element",
       ".ltx_Math",
+      "span.ltx_lstlisting:not(.ltx_listing)",
       "span.math.inline",
       "span.math.display",
       ".mathjax-block",
@@ -106,8 +107,6 @@
       ".vector-header"
     ],
     "forceInlineStyleSelectors": [".chemf", ".mwe-math-element", "[role=math]", ".nowrap"],
-    "minCharacters": 4,
-    "minWords": 2,
     "injectedCss": ".read-frog-translated-content-wrapper {content-visibility:auto;}\n.no-article-text-sister-projects li { height:unset; }",
     "excludeSelectors.add": [".lazy-image-placeholder"],
     "preserveTextSelectors": [".chemf", ".mwe-math-element", "[role=math]", ".nowrap"],
@@ -568,6 +567,7 @@
       "[app-name='blackbird-search'] [data-hpc='true']",
       ".topic-box > a > p:nth-of-type(2)",
       "[data-testid=\"listitem-title-link\"]",
+      "[data-testid=\"issue-listitem-title-link\"]",
       "#repo-content-turbo-frame p",
       "#repo-content-turbo-frame h4",
       "[aria-label=\"card content\"] .flex-column > div:nth-child(2)",
@@ -882,6 +882,7 @@
     "id": "substack",
     "matches": ["*.substack.com", "newsletter.rootsofprogress.org", "www.lennysnewsletter.com"],
     "excludeSelectors": [
+      ".shows-video-player-container",
       ".publication-footer",
       ".subscribe-footer",
       ".main-menu",
@@ -1226,7 +1227,8 @@
       "div[data-content-feature='1'] > div {-webkit-line-clamp: unset!important;max-height: unset!important;}",
       "div[style='-webkit-line-clamp:*'] {-webkit-line-clamp: unset!important;max-height: unset!important;}",
       ".Pw4Ldf.RsCEN {height:unset!important;}",
-      ".related-question-pair {overflow:auto!important;}"
+      ".related-question-pair {overflow:auto!important;}",
+      "[role=dialog][data-skip-highlighting] :has(.read-frog-translated-content-wrapper) {-webkit-line-clamp: unset!important;max-height: unset!important;}"
     ]
   },
   {
@@ -2360,8 +2362,15 @@
   },
   {
     "id": "bugsKde",
+    "description": "Translate Bugzilla descriptions and comments rendered as pre.bz_comment_text, while leaving other preformatted blocks excluded",
     "matches": "bugs.kde.org",
-    "excludeSelectors.add": [".bz_first_comment_head", ".bz_comment_head", ".related_actions"]
+    "dontWalkTags.remove": ["PRE"],
+    "excludeSelectors.add": [
+      ".bz_first_comment_head",
+      ".bz_comment_head",
+      ".related_actions",
+      "pre:not(.bz_comment_text)"
+    ]
   },
   {
     "id": "plati",
@@ -2410,7 +2419,8 @@
       "[role=listitem] {overflow:scroll;}",
       "[role=listitem] div {-webkit-line-clamp:unset;}",
       "[class*='km-listitem--medium'] {height:unset !important;}",
-      ".MuiListItem-root a > div :nth-child(2) {height:unset !important;}"
+      ".MuiListItem-root a > div :nth-child(2) {height:unset !important;}",
+      ".learnGuide .read-frog-translated-content-wrapper, .learnGuide .read-frog-translated-content-wrapper span:not(:where(.read-frog-inline-atom, .read-frog-inline-atom *)) {position:static !important; inset:auto !important; width:auto !important; height:auto !important; z-index:auto !important;}"
     ]
   },
   {
@@ -3286,12 +3296,12 @@
   {
     "id": "arxiv",
     "matches": ["https://browse.arxiv.org", "https://arxiv.org/html/*"],
+    "reflowLatexmlTextBoxes": true,
     "injectedCss.add": [
       ".ltx_title .read-frog-translated-inline-content, .ltx_title .read-frog-translated-block-content { line-height: 1.5; }"
     ],
     "excludeSelectors.add": [
       ".desktop_header",
-      "[class*='ltx_lst_language_']",
       "div.package-alerts",
       ".ltx_toclist",
       ".ltx_authors",
@@ -3301,6 +3311,7 @@
   {
     "id": "ar5iv",
     "matches": "ar5iv.labs.arxiv.org",
+    "reflowLatexmlTextBoxes": true,
     "excludeSelectors.add": [
       ".ltx_bibliography",
       ".ltx_tag.ltx_tag_item",
@@ -4573,9 +4584,21 @@
     "dontWalkTags.remove": ["PRE"]
   },
   {
+    "id": "gamefaqs-guides",
+    "description": "GameFAQs serves a text guide as an HTML page whose entire body is a run of <pre id=\"faqspan-N\"> blocks (about 50k characters each) under #faqtext. PRE is hard-blocked by default for authored code, and the plain-text exemption only covers text/plain documents, so the guide was never walked while the page around it translated. Limited to guide pages, where a <pre> holds the author's prose; its blank lines then split it into one translation per paragraph",
+    "matches": "gamefaqs.gamespot.com/*/faqs/*",
+    "dontWalkTags.remove": ["PRE"]
+  },
+  {
     "id": "readfrog-x-chat",
     "description": "Skip the X Chat message footer (send time + delivery receipt). It renders twice inside the bubble — once as an aria-hidden opacity-0 spacer in the text flow, once in the absolutely positioned overlay — so both copies otherwise land in the message's translation unit. Target the footer root only: excluding its `.absolute.bottom-0.inset-e-0` wrapper too would hide that wrapper from unwrapDeepestOnlyHTMLChild, turning the bubble row into an only-child chain and moving the translation wrapper down into the pre-wrap text block",
     "matches": ["chat.x.com"],
     "excludeSelectors": ["div.flex.items-center.ml-auto.shrink-0.gap-1"]
+  },
+  {
+    "id": "thenorthfacekorea",
+    "description": "The header dropdowns open on pure CSS hover (`.onedepth.twoDepth_hover:hover .twoDepth_wrap`), which changes no DOM, so the walk never came back to them after skipping them as display: none. The all-categories menu needs no entry: opening it sets a style on <body>, which already re-walks it",
+    "matches": "*.thenorthfacekorea.co.kr",
+    "walkHiddenSelectors": [".header-gnb .twoDepth_wrap"]
   }
 ]

@@ -27,7 +27,7 @@ final class AccountHTTPTransport: NSObject, URLSessionDataDelegate {
         request.httpShouldHandleCookies = false
         // Drop routing, cookie, browser-origin, and hop-by-hop headers supplied
         // by JS. A fixed official origin is used for the website's CSRF check.
-        let allowed = Set(["accept", "content-type", "accept-language", "x-orpc-version", "last-event-id"])
+        let allowed = Set(["accept", "content-type", "accept-language", "x-orpc-version", "x-orpc-source", "x-read-frog-client-context", "last-event-id"])
         for pair in headers where pair.count == 2 && allowed.contains(pair[0].lowercased()) {
             guard !pair[1].contains("\r"), !pair[1].contains("\n") else { throw URLError(.badURL) }
             request.setValue(pair[1], forHTTPHeaderField: pair[0])

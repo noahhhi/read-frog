@@ -15,13 +15,15 @@ final class MockAccountServer: URLProtocol {
  static func main() throws {
   let good = "https://api.readfrog.app/api/identity/get-session"
   func message(_ url: String = "https://api.readfrog.app/api/identity/get-session") -> [String: Any] {
-   ["url": url, "method": "GET", "headers": [["Host", "evil.test"], ["Cookie", "bad"], ["Origin", "https://evil.test"], ["accept", "application/json"]],
+   ["url": url, "method": "GET", "headers": [["Host", "evil.test"], ["Cookie", "bad"], ["Origin", "https://evil.test"], ["accept", "application/json"], ["x-orpc-source", "extension"], ["x-read-frog-client-context", "test-context"]],
     "cookies": [["name": "__Secure-better-auth.session_token", "value": "test-token"]]]
   }
   let req = try AccountHTTPTransport.makeRequest(message(good))
   precondition(req.value(forHTTPHeaderField: "Cookie") == "__Secure-better-auth.session_token=test-token")
   precondition(req.value(forHTTPHeaderField: "Origin") == "https://www.readfrog.app")
   precondition(req.value(forHTTPHeaderField: "Host") == nil)
+  precondition(req.value(forHTTPHeaderField: "x-orpc-source") == "extension")
+  precondition(req.value(forHTTPHeaderField: "x-read-frog-client-context") == "test-context")
   precondition(!req.httpShouldHandleCookies)
   for url in ["https://api.readfrog.app.evil.test/api/identity/get-session", "http://api.readfrog.app/api/identity/get-session", "https://user@api.readfrog.app/api/rpc/x", "https://api.readfrog.app:444/api/rpc/x", "https://api.readfrog.app/api/identity-extra/x"] {
    do { _ = try AccountHTTPTransport.makeRequest(message(url)); fatalError("Accepted forbidden URL") } catch {}

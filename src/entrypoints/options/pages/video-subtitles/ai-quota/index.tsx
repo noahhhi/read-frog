@@ -7,14 +7,11 @@ import { Progress, ProgressLabel } from "@/components/ui/base-ui/progress"
 import { Skeleton } from "@/components/ui/base-ui/skeleton"
 import { openLogIn } from "@/components/user-account-menu/shared"
 import { authClient } from "@/utils/auth/auth-client"
+import { pricingUrl } from "@/utils/error-action"
 import { i18n } from "@/utils/i18n"
 import { orpc } from "@/utils/orpc/client"
 import { cn } from "@/utils/styles/utils"
-import {
-  formatQuotaDate,
-  launchBonusCutoffLabel,
-  pricingUrl,
-} from "@/utils/subtitles/ai/entitlement"
+import { formatQuotaDate, launchBonusCutoffLabel } from "@/utils/subtitles/ai/entitlement"
 import { ConfigItem } from "../../../components/config-item"
 import { ConfigSection } from "../../../components/config-section"
 
@@ -119,7 +116,7 @@ function LaunchBonusPromo() {
     return null
   }
   return (
-    <p className="text-[13px] leading-[18px] text-blue-600 dark:text-blue-400">
+    <p className="text-[13px] leading-[18px] text-link">
       {i18n.t("options.videoSubtitles.aiQuota.launchBonusPromo", [cutoff])}
     </p>
   )
@@ -143,7 +140,11 @@ function QuotaUpgradeGuide() {
       <QuotaNotice>{i18n.t("options.videoSubtitles.aiQuota.upgradeRequired")}</QuotaNotice>
       {/* Unlike the player, this surface never navigates on its own — opening a
           tab just for landing on the settings page would be hostile. */}
-      <Button variant="outline" size="sm" onClick={() => window.open(pricingUrl(), "_blank")}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => window.open(pricingUrl("extension_video_quota"), "_blank")}
+      >
         {i18n.t("action.upgrade")}
       </Button>
       <LaunchBonusPromo />

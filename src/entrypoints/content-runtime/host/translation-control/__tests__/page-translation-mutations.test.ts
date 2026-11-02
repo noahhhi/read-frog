@@ -1,0 +1,2616 @@
+// @vitest-environment jsdom
+
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { DEFAULT_CONFIG } from "@/utils/constants/config"
+import { GIANT_SPLIT_STRANDED_TEXT_MAX_UNITS } from "@/utils/constants/translate"
+import {
+  isVirtualParagraphGroupCurrent,
+  markExtensionDrivenNodeRemoval,
+  markVirtualParagraphGroupInserted,
+  registerBilingualTranslationState,
+  registerTranslationOnlyAnchorState,
+  registerVirtualParagraphGroup,
+  unregisterBilingualTranslationState,
+  unregisterTranslationOnlyAnchorState,
+  unregisterVirtualParagraphGroup,
+  type BilingualTranslationState,
+  type VirtualParagraphGroup,
+} from "@/utils/host/translate/core/translation-state"
+import { PageTranslationManager } from "../page-translation"
+
+const {
+  mockDeepQueryTopLevelSelector,
+  mockGetDetectedCodeFromStorage,
+  mockGetRandomUUID,
+  mockGetLocalConfig,
+  mockGetOrCreateWebPageContext,
+  mockHasNoWalkAncestor,
+  mockIsDontWalkIntoAndDontTranslateAsChildElement,
+  mockIsDontWalkIntoButTranslateAsChildElement,
+  mockRemoveAllTranslatedWrapperNodes,
+  mockSendMessage,
+  mockTranslateTextForPageTitle,
+  mockTranslateNodesBilingualMode,
+  mockTranslateWalkedElement,
+  mockValidateTranslationConfigAndToast,
+  mockWalkAndLabelElement,
+  mockWalkAndLabelElementChunked,
+} = vi.hoisted(() => ({
+  mockGetDetectedCodeFromStorage: vi.fn<(...args: any[]) => any>(),
+  mockGetRandomUUID: vi.fn<(...args: any[]) => any>(),
+  mockGetLocalConfig: vi.fn<(...args: any[]) => any>(),
+  mockGetOrCreateWebPageContext: vi.fn<(...args: any[]) => any>(),
+  mockDeepQueryTopLevelSelector: vi.fn<(...args: any[]) => any>(),
+  mockHasNoWalkAncestor: vi.fn<(...args: any[]) => any>(),
+  mockIsDontWalkIntoAndDontTranslateAsChildElement: vi.fn<(...args: any[]) => any>(),
+  mockIsDontWalkIntoButTranslateAsChildElement: vi.fn<(...args: any[]) => any>(),
+  mockWalkAndLabelElement: vi.fn<(...args: any[]) => any>(),
+  mockWalkAndLabelElementChunked: vi.fn<(...args: any[]) => any>(),
+  mockRemoveAllTranslatedWrapperNodes: vi.fn<(...args: any[]) => any>(),
+  mockTranslateWalkedElement: vi.fn<(...args: any[]) => any>(),
+  mockTranslateTextForPageTitle: vi.fn<(...args: any[]) => any>(),
+  mockTranslateNodesBilingualMode: vi.fn<(...args: any[]) => any>(),
+  mockValidateTranslationConfigAndToast: vi.fn<(...args: any[]) => any>(),
+  mockSendMessage: vi.fn<(...args: any[]) => any>(),
+}))
+
+vi.mock("@/utils/config/languages", () => ({
+  getDetectedCodeFromStorage: mockGetDetectedCodeFromStorage,
+}))
+
+vi.mock("@/utils/config/storage", () => ({
+  getLocalConfig: mockGetLocalConfig,
+}))
+
+vi.mock("@/utils/crypto-polyfill", () => ({
+  getRandomUUID: mockGetRandomUUID,
+}))
+
+vi.mock("@/utils/host/dom/filter", () => ({
+  hasNoWalkAncestor: mockHasNoWalkAncestor,
+  isDontWalkIntoAndDontTranslateAsChildElement: mockIsDontWalkIntoAndDontTranslateAsChildElement,
+  isDontWalkIntoButTranslateAsChildElement: mockIsDontWalkIntoButTranslateAsChildElement,
+  isWalkBlockedElement: (element: HTMLElement, config: unknown) =>
+    mockIsDontWalkIntoButTranslateAsChildElement(element, config) ||
+    mockIsDontWalkIntoAndDontTranslateAsChildElement(element, config),
+  isHTMLElement: (node: unknown) => node instanceof HTMLElement,
+  isTranslatedWrapperNode: (node: unknown) =>
+    node instanceof HTMLElement && node.classList.contains("read-frog-translated-content-wrapper"),
+}))
+
+vi.mock("@/utils/host/dom/find", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/host/dom/find")>()),
+  deepQueryTopLevelSelector: mockDeepQueryTopLevelSelector,
+}))
+
+// The labeling walk is mocked, but canSplitGiantWithoutStrandingOwnText is
+// kept real: it is the behavior under test in the giant-split cases below.
+vi.mock("@/utils/host/dom/traversal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/host/dom/traversal")>()),
+  walkAndLabelElement: mockWalkAndLabelElement,
+  walkAndLabelElementChunked: mockWalkAndLabelElementChunked,
+}))
+
+vi.mock("@/utils/host/translate/node-manipulation", () => ({
+  removeAllTranslatedWrapperNodes: mockRemoveAllTranslatedWrapperNodes,
+  translateNodesBilingualMode: mockTranslateNodesBilingualMode,
+  translateWalkedElement: mockTranslateWalkedElement,
+}))
+
+vi.mock("@/utils/host/translate/translate-text", () => ({
+  validateTranslationConfigAndToast: mockValidateTranslationConfigAndToast,
+}))
+
+vi.mock("@/utils/host/translate/translate-variants", () => ({
+  translateTextForPageTitle: mockTranslateTextForPageTitle,
+}))
+
+vi.mock("@/utils/host/translate/webpage-context", () => ({
+  getOrCreateWebPageContext: mockGetOrCreateWebPageContext,
+}))
+
+vi.mock("@/utils/logger", () => ({
+  logger: {
+    error: vi.fn<(...args: any[]) => any>(),
+    info: vi.fn<(...args: any[]) => any>(),
+    warn: vi.fn<(...args: any[]) => any>(),
+  },
+}))
+
+vi.mock("@/utils/message", () => ({
+  sendMessage: mockSendMessage,
+}))
+
+const intersectionObservers: MockIntersectionObserver[] = []
+
+class MockIntersectionObserver {
+  observe = vi.fn<(...args: any[]) => any>((target: Element) => {
+    this.targets.add(target)
+  })
+
+  unobserve = vi.fn<(...args: any[]) => any>((target: Element) => {
+    this.targets.delete(target)
+  })
+
+  disconnect = vi.fn<(...args: any[]) => any>(() => {
+    this.targets.clear()
+  })
+
+  private readonly targets = new Set<Element>()
+
+  constructor(
+    private readonly callback: IntersectionObserverCallback,
+    _options?: IntersectionObserverInit,
+  ) {
+    intersectionObservers.push(this)
+  }
+
+  async triggerIntersect(target: Element): Promise<void> {
+    await this.triggerIntersectAll([target])
+  }
+
+  /** Deliver several intersections in one callback batch, as the browser does. */
+  async triggerIntersectAll(targets: Element[]): Promise<void> {
+    this.callback(
+      targets.map((target) => ({ isIntersecting: true, target }) as IntersectionObserverEntry),
+      this as unknown as IntersectionObserver,
+    )
+  }
+}
+
+async function flushDomUpdates(): Promise<void> {
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await Promise.resolve()
+}
+
+/**
+ * jsdom has no layout: every element reports an empty rect list, which is
+ * exactly how a `display: contents` element looks in a real browser. Give an
+ * element a box so it reads as rendered.
+ */
+function giveBox(element: Element, rect: Partial<DOMRect> = {}): void {
+  const box = {
+    top: 0,
+    bottom: 20,
+    left: 0,
+    right: 100,
+    width: 100,
+    height: 20,
+    ...rect,
+  } as DOMRect
+  element.getClientRects = () => [box] as unknown as DOMRectList
+  element.getBoundingClientRect = () => box
+}
+
+function deepQueryTopLevelSelectorImpl(
+  root: Document | ShadowRoot | HTMLElement,
+  selectorFn: (element: HTMLElement) => boolean,
+): HTMLElement[] {
+  if (root instanceof Document) {
+    return root.body ? deepQueryTopLevelSelectorImpl(root.body, selectorFn) : []
+  }
+
+  if (root instanceof HTMLElement && selectorFn(root)) {
+    return [root]
+  }
+
+  const result: HTMLElement[] = []
+
+  if (root instanceof HTMLElement && root.shadowRoot) {
+    result.push(...deepQueryTopLevelSelectorImpl(root.shadowRoot, selectorFn))
+  }
+
+  for (const child of root.children) {
+    if (child instanceof HTMLElement) {
+      result.push(...deepQueryTopLevelSelectorImpl(child, selectorFn))
+    }
+  }
+
+  return result
+}
+
+const MOCK_BLOCK_TAGS = new Set(["P", "DIV", "BR", "UL", "LI", "SECTION", "ARTICLE", "BODY"])
+
+function isBlockedForTraversal(element: HTMLElement): boolean {
+  return (
+    Boolean(element.hidden) ||
+    element.matches("[data-site-rule-blocked][aria-hidden='true']") ||
+    element.classList.contains("closed")
+  )
+}
+
+function walkAndLabelVisibleParagraphs(
+  element: HTMLElement,
+  walkId: string,
+  onBlockedElement?: (blocked: HTMLElement) => void,
+) {
+  if (
+    mockIsDontWalkIntoButTranslateAsChildElement(element, DEFAULT_CONFIG) ||
+    mockIsDontWalkIntoAndDontTranslateAsChildElement(element, DEFAULT_CONFIG)
+  ) {
+    onBlockedElement?.(element)
+    return {
+      forceBlock: false,
+      isInlineNode: false,
+    }
+  }
+
+  element.setAttribute("data-read-frog-walked", walkId)
+
+  // Like the real labeling walk, one call traverses nested shadow trees too.
+  for (const child of [...element.children, ...(element.shadowRoot?.children ?? [])]) {
+    if (child instanceof HTMLElement) {
+      walkAndLabelVisibleParagraphs(child, walkId, onBlockedElement)
+    }
+  }
+
+  // Mirror the real rule (traversal.ts walkNode): ANY element with a non-blank
+  // direct Text child is labelled, inline ones included -- that is exactly how
+  // #2185's inline decorator got promoted to a unit. Labelling only <p> here
+  // would make every inline-promotion assertion pass vacuously.
+  const hasDirectText = [...element.childNodes].some(
+    (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+  )
+  if ((element.tagName === "P" || hasDirectText) && element.textContent?.trim()) {
+    element.setAttribute("data-read-frog-paragraph", "")
+  }
+
+  // The real walker labels block-level elements too, and the stranded-text
+  // guard reads that label to tell a re-segmentable container from one that
+  // would collapse into a single request. Without this the guard could never
+  // fire under the mock.
+  if (MOCK_BLOCK_TAGS.has(element.tagName)) {
+    element.setAttribute("data-read-frog-block-node", "")
+  }
+
+  return {
+    forceBlock: false,
+    isInlineNode: false,
+  }
+}
+
+describe("pageTranslationManager mutation re-walk", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    intersectionObservers.length = 0
+
+    document.head.innerHTML = ""
+    document.body.innerHTML = ""
+    document.title = ""
+
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver)
+
+    mockGetDetectedCodeFromStorage.mockResolvedValue("eng")
+    mockGetRandomUUID.mockReset().mockReturnValue("walk-id")
+    mockGetLocalConfig.mockResolvedValue(DEFAULT_CONFIG)
+    mockGetOrCreateWebPageContext.mockResolvedValue({
+      url: window.location.href,
+      webTitle: "",
+      webContent: "",
+    })
+    mockHasNoWalkAncestor.mockReturnValue(false)
+    mockIsDontWalkIntoButTranslateAsChildElement.mockReturnValue(false)
+    mockIsDontWalkIntoAndDontTranslateAsChildElement.mockImplementation((element: HTMLElement) =>
+      isBlockedForTraversal(element),
+    )
+    mockDeepQueryTopLevelSelector.mockImplementation(deepQueryTopLevelSelectorImpl)
+    mockWalkAndLabelElement.mockImplementation(
+      (
+        element: HTMLElement,
+        walkId: string,
+        _config: unknown,
+        callbacks?: { onBlockedElement?: (blocked: HTMLElement) => void },
+      ) => walkAndLabelVisibleParagraphs(element, walkId, callbacks?.onBlockedElement),
+    )
+    mockWalkAndLabelElementChunked.mockImplementation(
+      async (
+        element: HTMLElement,
+        walkId: string,
+        _config: unknown,
+        options?: { onBlockedElement?: (blocked: HTMLElement) => void },
+      ) => walkAndLabelVisibleParagraphs(element, walkId, options?.onBlockedElement),
+    )
+    mockTranslateTextForPageTitle.mockResolvedValue("")
+    mockTranslateNodesBilingualMode.mockReset().mockResolvedValue(undefined)
+    mockValidateTranslationConfigAndToast.mockReturnValue(true)
+    mockSendMessage.mockResolvedValue(undefined)
+  })
+
+  it("observes pre-existing reader content mounted beside the body", async () => {
+    const readerRoot = document.createElement("sr-read")
+    readerRoot.innerHTML = `
+      <sr-rd-content>
+        <p id="reader-paragraph">Reader mode content</p>
+      </sr-rd-content>
+    `
+    document.documentElement.append(readerRoot)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const observer = intersectionObservers[0]
+      const readerParagraph = document.getElementById("reader-paragraph") as HTMLElement
+
+      expect(observer!.observe).toHaveBeenCalledWith(readerParagraph)
+
+      await observer!.triggerIntersect(readerParagraph)
+      await flushDomUpdates()
+
+      expect(mockTranslateWalkedElement).toHaveBeenCalledWith(
+        readerParagraph,
+        "walk-id",
+        DEFAULT_CONFIG,
+        false,
+        expect.anything(),
+        expect.anything(),
+      )
+    } finally {
+      if (manager.isActive) manager.stop()
+      readerRoot.remove()
+    }
+  })
+
+  // A `display: contents` unit has no box, so observing it directly never
+  // fires and the unit never translates (Telegram web wraps every message in
+  // one). In these tests the unit is left box-less and its surroundings get boxes.
+  it("gates display: contents units on the box their content is laid out in", async () => {
+    document.body.innerHTML = `
+      <div id="plain-bubble"><div id="plain">Thanks, I will test it this afternoon.</div></div>
+      <div id="rich-bubble"><div id="rich">Hey there, <b id="bold">welcome</b> to the team!</div></div>
+    `
+    const plainBubble = document.getElementById("plain-bubble") as HTMLElement
+    const richBubble = document.getElementById("rich-bubble") as HTMLElement
+    const plain = document.getElementById("plain") as HTMLElement
+    const rich = document.getElementById("rich") as HTMLElement
+    const bold = document.getElementById("bold") as HTMLElement
+    giveBox(plainBubble)
+    giveBox(richBubble)
+    giveBox(bold)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const [unitObserver, boxObserver] = intersectionObservers
+      expect(unitObserver!.observe).not.toHaveBeenCalledWith(plain)
+      expect(unitObserver!.observe).not.toHaveBeenCalledWith(rich)
+      // Plain text has no box of its own; the bubble it is laid out in covers it.
+      expect(boxObserver!.observe).toHaveBeenCalledWith(plainBubble)
+      expect(boxObserver!.observe).toHaveBeenCalledWith(richBubble)
+
+      await boxObserver!.triggerIntersectAll([plainBubble, richBubble])
+      await flushDomUpdates()
+      // A box that intersects again has nothing left to hand over.
+      await boxObserver!.triggerIntersect(richBubble)
+      await flushDomUpdates()
+
+      const translated = mockTranslateWalkedElement.mock.calls.map((call) => call[0])
+      expect(translated).toEqual([plain, rich])
+      expect(mockTranslateWalkedElement).toHaveBeenCalledWith(
+        plain,
+        "walk-id",
+        DEFAULT_CONFIG,
+        false,
+        expect.anything(),
+        expect.anything(),
+      )
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  // A walkHiddenSelectors rule labels closed menus up front. Their units are
+  // box-less only until the site shows them, so gating them on the visible
+  // menu item like a display: contents unit would translate every closed menu
+  // as soon as the header scrolls into view.
+  it("observes a unit in a closed menu directly instead of gating it on the menu item", async () => {
+    document.body.innerHTML = `
+      <section id="menu-item"><div style="display: none"><p id="entry">Down jackets</p></div></section>
+    `
+    const menuItem = document.getElementById("menu-item") as HTMLElement
+    const entry = document.getElementById("entry") as HTMLElement
+    giveBox(menuItem)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const [unitObserver, boxObserver] = intersectionObservers
+      expect(unitObserver!.observe).toHaveBeenCalledWith(entry)
+      expect(boxObserver).toBeUndefined()
+      expect(mockTranslateWalkedElement).not.toHaveBeenCalled()
+
+      // The site opens the menu.
+      await unitObserver!.triggerIntersect(entry)
+      await flushDomUpdates()
+
+      expect(mockTranslateWalkedElement.mock.calls.map((call) => call[0])).toEqual([entry])
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  // Opening the menu never gives a display: contents unit a box of its own, so
+  // observed directly it would never translate.
+  it("still gates a display: contents unit in a closed menu on a box", async () => {
+    document.body.innerHTML = `
+      <section id="menu-item"><div style="display: none"><div id="entry" style="display: contents">Down jackets</div></div></section>
+    `
+    const menuItem = document.getElementById("menu-item") as HTMLElement
+    const entry = document.getElementById("entry") as HTMLElement
+    giveBox(menuItem)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const [unitObserver, boxObserver] = intersectionObservers
+      expect(unitObserver!.observe).not.toHaveBeenCalledWith(entry)
+      expect(boxObserver!.observe).toHaveBeenCalledWith(menuItem)
+
+      await boxObserver!.triggerIntersect(menuItem)
+      await flushDomUpdates()
+
+      expect(mockTranslateWalkedElement.mock.calls.map((call) => call[0])).toEqual([entry])
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("gates a display: contents unit on its own boxes when its layout box is too tall", async () => {
+    // The column holds the whole page, so its intersection says nothing about
+    // where this message is. The message's inline boxes do.
+    document.body.innerHTML = `<section id="column"><div id="message">Hey there, <b id="first">welcome</b> to the <i id="second">community</i>!</div></section>`
+    const column = document.getElementById("column") as HTMLElement
+    const message = document.getElementById("message") as HTMLElement
+    const first = document.getElementById("first") as HTMLElement
+    const second = document.getElementById("second") as HTMLElement
+    giveBox(column, { bottom: 100_000, height: 100_000 })
+    giveBox(first)
+    giveBox(second)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const boxObserver = intersectionObservers[1]
+      expect(boxObserver!.observe).not.toHaveBeenCalledWith(column)
+      expect(boxObserver!.observe).toHaveBeenCalledWith(first)
+      expect(boxObserver!.observe).toHaveBeenCalledWith(second)
+
+      // Boxes on one line usually intersect in the same batch.
+      await boxObserver!.triggerIntersectAll([first, second])
+      await flushDomUpdates()
+
+      expect(mockTranslateWalkedElement).toHaveBeenCalledTimes(1)
+      expect(mockTranslateWalkedElement.mock.calls[0]![0]).toBe(message)
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("still translates a display: contents unit after a box inside it is re-walked as a unit of its own", async () => {
+    document.body.innerHTML = `<div id="bubble"><div id="message">Hey there, <b id="first">welcome</b>!</div></div>`
+    const bubble = document.getElementById("bubble") as HTMLElement
+    const message = document.getElementById("message") as HTMLElement
+    const first = document.getElementById("first") as HTMLElement
+    giveBox(bubble)
+    giveBox(first)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const [unitObserver, boxObserver] = intersectionObservers
+      expect(boxObserver!.observe).toHaveBeenCalledWith(bubble)
+
+      // Re-inserting a box before it was ever seen makes the mutation walk
+      // register it as a unit too. That must not take the message's gate away.
+      message.append(first)
+      await flushDomUpdates()
+      expect(unitObserver!.observe).toHaveBeenCalledWith(first)
+
+      await unitObserver!.triggerIntersect(first)
+      await boxObserver!.triggerIntersect(bubble)
+      await flushDomUpdates()
+
+      const translated = mockTranslateWalkedElement.mock.calls.map((call) => call[0])
+      expect(translated).toContain(first)
+      expect(translated).toContain(message)
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("translates the display: contents unit the site rebuilt, not the one it removed", async () => {
+    document.body.innerHTML = `<div id="bubble"><div id="old">Old <b id="first">welcome</b></div></div>`
+    const bubble = document.getElementById("bubble") as HTMLElement
+    const oldMessage = document.getElementById("old") as HTMLElement
+    const first = document.getElementById("first") as HTMLElement
+    giveBox(bubble)
+    giveBox(first)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+      const boxObserver = intersectionObservers[1]
+
+      // The site rebuilds the message around the same box before it is seen.
+      const newMessage = document.createElement("div")
+      newMessage.append("New ", first)
+      oldMessage.replaceWith(newMessage)
+      await flushDomUpdates()
+
+      await boxObserver!.triggerIntersect(bubble)
+      await flushDomUpdates()
+
+      const translated = mockTranslateWalkedElement.mock.calls.map((call) => call[0])
+      expect(translated).toContain(newMessage)
+      expect(translated).not.toContain(oldMessage)
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("gates a plain-text display: contents unit at the top of a shadow root on its host", async () => {
+    document.body.innerHTML = `<div id="host"></div>`
+    const host = document.getElementById("host") as HTMLElement
+    host.attachShadow({
+      mode: "open",
+    }).innerHTML = `<div id="message">Plain text inside a shadow root</div>`
+    const message = host.shadowRoot!.getElementById("message") as HTMLElement
+    giveBox(host)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      // parentElement stops at the shadow root; the text is laid out in the host.
+      const boxObserver = intersectionObservers[1]
+      expect(boxObserver!.observe).toHaveBeenCalledWith(host)
+
+      await boxObserver!.triggerIntersect(host)
+      await flushDomUpdates()
+
+      expect(mockTranslateWalkedElement.mock.calls.map((call) => call[0])).toEqual([message])
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("does not gate display: contents units on a scrolling list whose content is too tall", async () => {
+    // The list's own box is a 400px viewport over 10,000px of history. Taking
+    // every unit in it on its first intersection would enqueue the history at
+    // once, so each unit falls back to its own boxes (or direct observation).
+    document.body.innerHTML = `
+      <div id="list">
+        <div id="plain">An older message in plain text</div>
+        <div id="rich">A newer message with <b id="bold">formatting</b></div>
+      </div>
+    `
+    const list = document.getElementById("list") as HTMLElement
+    const plain = document.getElementById("plain") as HTMLElement
+    const rich = document.getElementById("rich") as HTMLElement
+    const bold = document.getElementById("bold") as HTMLElement
+    giveBox(list, { bottom: 400, height: 400 })
+    Object.defineProperty(list, "scrollHeight", { value: 10_000 })
+    giveBox(bold)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const [unitObserver, boxObserver] = intersectionObservers
+      expect(boxObserver!.observe).not.toHaveBeenCalledWith(list)
+      expect(boxObserver!.observe).toHaveBeenCalledWith(bold)
+      expect(unitObserver!.observe).toHaveBeenCalledWith(plain)
+
+      await boxObserver!.triggerIntersect(bold)
+      await flushDomUpdates()
+
+      expect(mockTranslateWalkedElement.mock.calls.map((call) => call[0])).toEqual([rich])
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("falls back to a box inside a display: contents shadow host when the layout box is too tall", async () => {
+    document.body.innerHTML = `<section id="column"><div id="message">Hello <span id="chip"></span></div></section>`
+    const message = document.getElementById("message") as HTMLElement
+    const chip = document.getElementById("chip") as HTMLElement
+    // The chip is box-less too; what it renders lives in its shadow tree.
+    chip.attachShadow({ mode: "open" }).innerHTML = `<b id="inner">world</b>`
+    const inner = chip.shadowRoot!.getElementById("inner") as HTMLElement
+    giveBox(document.getElementById("column")!, { bottom: 100_000, height: 100_000 })
+    giveBox(inner)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const boxObserver = intersectionObservers[1]
+      expect(boxObserver!.observe).toHaveBeenCalledWith(inner)
+
+      await boxObserver!.triggerIntersect(inner)
+      await flushDomUpdates()
+
+      expect(mockTranslateWalkedElement.mock.calls.map((call) => call[0])).toContain(message)
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("takes every pending unit laid out in a shared box, nested ones included", async () => {
+    // The inner unit sits at the top of a shadow root inside the outer one, so
+    // both are top-level units, and both are laid out in the same bubble.
+    document.body.innerHTML = `<div id="bubble"><div id="outer">Outer text <span id="host"></span></div></div>`
+    const bubble = document.getElementById("bubble") as HTMLElement
+    const outer = document.getElementById("outer") as HTMLElement
+    const host = document.getElementById("host") as HTMLElement
+    host.attachShadow({ mode: "open" }).innerHTML = `<div id="nested">Nested text</div>`
+    const nested = host.shadowRoot!.getElementById("nested") as HTMLElement
+    giveBox(bubble)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const boxObserver = intersectionObservers[1]
+      expect(boxObserver!.observe).toHaveBeenCalledWith(bubble)
+
+      await boxObserver!.triggerIntersect(bubble)
+      await flushDomUpdates()
+
+      const translated = mockTranslateWalkedElement.mock.calls.map((call) => call[0])
+      expect(translated).toContain(outer)
+      expect(translated).toContain(nested)
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("stops gating a unit on its old box once it gains a box of its own and is re-walked", async () => {
+    document.body.innerHTML = `<div id="bubble"><div id="message">A message that will get its own box</div></div>`
+    const bubble = document.getElementById("bubble") as HTMLElement
+    const message = document.getElementById("message") as HTMLElement
+    giveBox(bubble)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+      const [unitObserver, boxObserver] = intersectionObservers
+      expect(boxObserver!.observe).toHaveBeenCalledWith(bubble)
+
+      // The site switches it to display: block and puts it back.
+      giveBox(message)
+      bubble.append(message)
+      await flushDomUpdates()
+      expect(unitObserver!.observe).toHaveBeenCalledWith(message)
+
+      // Its old gate and its own box fire in the same rendering update.
+      await boxObserver!.triggerIntersect(bubble)
+      await unitObserver!.triggerIntersect(message)
+      await flushDomUpdates()
+
+      expect(mockTranslateWalkedElement.mock.calls.map((call) => call[0])).toEqual([message])
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("counts a scrolling list inside a box-less unit when deciding whether to split it", async () => {
+    // The list shows 300px but holds 20,000px of history. Measured by its box
+    // alone, the unit would pass as short and translate whole.
+    document.body.innerHTML = `<div id="wrapper"><div id="list"><p id="first">First paragraph</p><p id="last">Last paragraph</p></div></div>`
+    const wrapper = document.getElementById("wrapper") as HTMLElement
+    const list = document.getElementById("list") as HTMLElement
+    const first = document.getElementById("first") as HTMLElement
+    const last = document.getElementById("last") as HTMLElement
+    // The mock walk labels by direct text only; the real one labels this too.
+    wrapper.setAttribute("data-read-frog-paragraph", "")
+    giveBox(list, { bottom: 300, height: 300 })
+    Object.defineProperty(list, "scrollHeight", { value: 20_000 })
+    giveBox(first)
+    giveBox(last)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const observed = intersectionObservers[0]!.observe.mock.calls.map((call) => call[0])
+      expect(observed).toContain(first)
+      expect(observed).toContain(last)
+      expect(observed).not.toContain(wrapper)
+      // Split, so nothing was left to gate through its boxes.
+      expect(intersectionObservers).toHaveLength(1)
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("gives each unit its own gate when its layout box grew past the cap before intersecting", async () => {
+    document.body.innerHTML = `
+      <div id="list">
+        <div id="first">First message with <b id="first-box">formatting</b></div>
+        <div id="second">Second message with <b id="second-box">formatting</b></div>
+      </div>
+    `
+    const list = document.getElementById("list") as HTMLElement
+    const second = document.getElementById("second") as HTMLElement
+    const firstBox = document.getElementById("first-box") as HTMLElement
+    const secondBox = document.getElementById("second-box") as HTMLElement
+    let listContentHeight = 400
+    giveBox(list, { bottom: 400, height: 400 })
+    Object.defineProperty(list, "scrollHeight", { get: () => listContentHeight })
+    giveBox(firstBox)
+    giveBox(secondBox)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+      const boxObserver = intersectionObservers[1]
+      expect(boxObserver!.observe).toHaveBeenCalledWith(list)
+
+      // History loads in while the list is off-screen.
+      listContentHeight = 50_000
+      await boxObserver!.triggerIntersect(list)
+      await flushDomUpdates()
+      expect(mockTranslateWalkedElement).not.toHaveBeenCalled()
+      expect(boxObserver!.observe).toHaveBeenCalledWith(firstBox)
+      expect(boxObserver!.observe).toHaveBeenCalledWith(secondBox)
+
+      await boxObserver!.triggerIntersect(secondBox)
+      await flushDomUpdates()
+      expect(mockTranslateWalkedElement.mock.calls.map((call) => call[0])).toEqual([second])
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("stops watching the gates of a pending unit that is removed whole", async () => {
+    document.body.innerHTML = `<section id="column"><div id="message">Hello <b id="inner">world</b></div></section>`
+    const message = document.getElementById("message") as HTMLElement
+    const inner = document.getElementById("inner") as HTMLElement
+    giveBox(document.getElementById("column")!, { bottom: 100_000, height: 100_000 })
+    giveBox(inner)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+      const boxObserver = intersectionObservers[1]
+      expect(boxObserver!.observe).toHaveBeenCalledWith(inner)
+
+      // Virtualization drops the whole message; the record's target is the column.
+      message.remove()
+      await flushDomUpdates()
+      expect(boxObserver!.unobserve).toHaveBeenCalledWith(inner)
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("does not gate display: contents units on a row that scrolls far sideways", async () => {
+    // 100px tall and 400px wide, over 50,000px of cards to scroll through.
+    document.body.innerHTML = `
+      <div id="row">
+        <div id="first">First card with <b id="first-box">formatting</b></div>
+        <div id="second">Second card with <b id="second-box">formatting</b></div>
+      </div>
+    `
+    const row = document.getElementById("row") as HTMLElement
+    const second = document.getElementById("second") as HTMLElement
+    const firstBox = document.getElementById("first-box") as HTMLElement
+    const secondBox = document.getElementById("second-box") as HTMLElement
+    giveBox(row, { bottom: 100, height: 100, right: 400, width: 400 })
+    Object.defineProperty(row, "scrollWidth", { value: 50_000 })
+    giveBox(firstBox)
+    giveBox(secondBox)
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const boxObserver = intersectionObservers[1]
+      expect(boxObserver!.observe).not.toHaveBeenCalledWith(row)
+      expect(boxObserver!.observe).toHaveBeenCalledWith(firstBox)
+      expect(boxObserver!.observe).toHaveBeenCalledWith(secondBox)
+
+      await boxObserver!.triggerIntersect(secondBox)
+      await flushDomUpdates()
+      expect(mockTranslateWalkedElement.mock.calls.map((call) => call[0])).toEqual([second])
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("splits a tall display: contents unit by the extent of its boxes", async () => {
+    // Its own rect is 0×0, but what it renders spans 5000px — past the split
+    // cap, so its paragraphs must be gated one by one instead of all at once.
+    document.body.innerHTML = `<div id="wrapper"><p id="top">First paragraph</p><p id="bottom">Last paragraph</p></div>`
+    const wrapper = document.getElementById("wrapper") as HTMLElement
+    const top = document.getElementById("top") as HTMLElement
+    const bottom = document.getElementById("bottom") as HTMLElement
+    // The mock walk labels by direct text only; the real one labels this too.
+    wrapper.setAttribute("data-read-frog-paragraph", "")
+    giveBox(top, { top: 0, bottom: 20 })
+    giveBox(bottom, { top: 5000, bottom: 5020 })
+
+    const manager = new PageTranslationManager()
+    try {
+      await manager.start()
+      await flushDomUpdates()
+
+      const observed = intersectionObservers[0]!.observe.mock.calls.map((call) => call[0])
+      expect(observed).toContain(top)
+      expect(observed).toContain(bottom)
+      expect(observed).not.toContain(wrapper)
+      // Split, so nothing was left to gate through its boxes.
+      expect(intersectionObservers).toHaveLength(1)
+    } finally {
+      if (manager.isActive) manager.stop()
+    }
+  })
+
+  it("observes and translates hidden accordion content after it becomes visible", async () => {
+    document.body.innerHTML = `
+      <section id="accordion" hidden>
+        <p id="panel">Accordion body</p>
+      </section>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observer = intersectionObservers[0]
+    const accordion = document.getElementById("accordion") as HTMLElement
+    const panel = document.getElementById("panel") as HTMLElement
+
+    expect(observer!.observe).not.toHaveBeenCalled()
+
+    accordion.removeAttribute("hidden")
+    await flushDomUpdates()
+
+    expect(observer!.observe).toHaveBeenCalledWith(panel)
+
+    await observer!.triggerIntersect(panel)
+    await flushDomUpdates()
+
+    expect(mockTranslateWalkedElement).toHaveBeenCalledWith(
+      panel,
+      "walk-id",
+      DEFAULT_CONFIG,
+      false,
+      expect.anything(),
+      expect.anything(),
+    )
+
+    manager.stop()
+  })
+
+  it("observes and translates aria-hidden content after a site-rule block becomes walkable", async () => {
+    document.body.innerHTML = `
+      <section id="accordion" data-site-rule-blocked aria-hidden="true">
+        <p id="panel">Accordion body</p>
+      </section>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observer = intersectionObservers[0]
+    const accordion = document.getElementById("accordion") as HTMLElement
+    const panel = document.getElementById("panel") as HTMLElement
+
+    expect(observer!.observe).not.toHaveBeenCalled()
+
+    accordion.setAttribute("aria-hidden", "false")
+    await flushDomUpdates()
+
+    expect(observer!.observe).toHaveBeenCalledWith(panel)
+
+    await observer!.triggerIntersect(panel)
+    await flushDomUpdates()
+
+    expect(mockTranslateWalkedElement).toHaveBeenCalledWith(
+      panel,
+      "walk-id",
+      DEFAULT_CONFIG,
+      false,
+      expect.anything(),
+      expect.anything(),
+    )
+
+    manager.stop()
+  })
+
+  it("keeps style/class based re-walk behavior for existing hidden panels", async () => {
+    document.body.innerHTML = `
+      <section id="accordion" class="closed">
+        <p id="panel">Accordion body</p>
+      </section>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observer = intersectionObservers[0]
+    const accordion = document.getElementById("accordion") as HTMLElement
+    const panel = document.getElementById("panel") as HTMLElement
+
+    expect(observer!.observe).not.toHaveBeenCalled()
+
+    accordion.classList.remove("closed")
+    await flushDomUpdates()
+
+    expect(observer!.observe).toHaveBeenCalledWith(panel)
+
+    await observer!.triggerIntersect(panel)
+    await flushDomUpdates()
+
+    expect(mockTranslateWalkedElement).toHaveBeenCalledWith(
+      panel,
+      "walk-id",
+      DEFAULT_CONFIG,
+      false,
+      expect.anything(),
+      expect.anything(),
+    )
+
+    manager.stop()
+  })
+
+  it("only rechecks branches with cached blockers after an ancestor attribute changes", async () => {
+    document.body.innerHTML = `<div id="ancestor">
+      <section><p id="blocked" hidden>Hidden content</p></section>
+      <section id="unrelated"><p>Visible content</p></section>
+    </div>`
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    try {
+      const ancestor = document.getElementById("ancestor") as HTMLElement
+      const blocked = document.getElementById("blocked") as HTMLElement
+      const unrelated = document.getElementById("unrelated") as HTMLElement
+      mockIsDontWalkIntoAndDontTranslateAsChildElement.mockClear()
+      mockWalkAndLabelElement.mockClear()
+
+      ancestor.classList.add("highlighted")
+      await flushDomUpdates()
+
+      expect(mockIsDontWalkIntoAndDontTranslateAsChildElement).toHaveBeenCalledWith(
+        blocked,
+        DEFAULT_CONFIG,
+      )
+      expect(mockIsDontWalkIntoAndDontTranslateAsChildElement).not.toHaveBeenCalledWith(
+        unrelated,
+        DEFAULT_CONFIG,
+      )
+      expect(mockIsDontWalkIntoAndDontTranslateAsChildElement).not.toHaveBeenCalledWith(
+        unrelated.firstElementChild,
+        DEFAULT_CONFIG,
+      )
+      expect(mockWalkAndLabelElement).not.toHaveBeenCalled()
+    } finally {
+      manager.stop()
+    }
+  })
+
+  it("retranslates an existing logical source after its text expands in place", async () => {
+    document.body.innerHTML = `
+      <p id="tweet"><span id="source">Truncated tweet</span></p>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const source = document.getElementById("source")!.firstChild as Text
+    const wrapper = document.createElement("span")
+    wrapper.className = "read-frog-translated-content-wrapper"
+    wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+    tweet.append(wrapper)
+    const state: BilingualTranslationState = {
+      layoutSource: tweet,
+      sourceTextContent: "Truncated tweet",
+      status: "active",
+      walkId: "walk-id",
+      wrapper,
+      wrapperTextContent: null,
+    }
+    registerBilingualTranslationState(state)
+    mockTranslateNodesBilingualMode.mockImplementation(async () => {
+      unregisterBilingualTranslationState(state)
+    })
+    await flushDomUpdates()
+    mockTranslateNodesBilingualMode.mockClear()
+
+    source.data = "Expanded tweet content"
+    await flushDomUpdates()
+
+    expect(mockWalkAndLabelElement).toHaveBeenCalledWith(tweet, "walk-id", DEFAULT_CONFIG)
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledWith([tweet], "walk-id", DEFAULT_CONFIG)
+
+    unregisterBilingualTranslationState(state)
+    manager.stop()
+  })
+
+  it("runs another refresh when the source changes during a pending retranslation", async () => {
+    document.body.innerHTML = `
+      <p id="tweet"><span id="source">Initial tweet</span></p>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const source = document.getElementById("source")!.firstChild as Text
+    const createState = (): BilingualTranslationState => {
+      const wrapper = document.createElement("span")
+      wrapper.className = "read-frog-translated-content-wrapper"
+      wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+      const state: BilingualTranslationState = {
+        layoutSource: tweet,
+        sourceTextContent: source.data,
+        status: "active",
+        walkId: "walk-id",
+        wrapper,
+        wrapperTextContent: null,
+      }
+      tweet.append(wrapper)
+      registerBilingualTranslationState(state)
+      return state
+    }
+
+    let activeState = createState()
+    let resolveFirstRefresh!: () => void
+    const firstRefresh = new Promise<void>((resolve) => {
+      resolveFirstRefresh = resolve
+    })
+    mockTranslateNodesBilingualMode.mockImplementation(async () => {
+      unregisterBilingualTranslationState(activeState)
+      activeState.wrapper?.remove()
+      if (mockTranslateNodesBilingualMode.mock.calls.length === 1) {
+        activeState = createState()
+        await firstRefresh
+      }
+    })
+    await flushDomUpdates()
+    mockTranslateNodesBilingualMode.mockClear()
+
+    source.data = "Expanded once"
+    await flushDomUpdates()
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(1)
+
+    source.data = "Expanded twice"
+    await flushDomUpdates()
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(1)
+
+    resolveFirstRefresh()
+    await flushDomUpdates()
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(2)
+
+    unregisterBilingualTranslationState(activeState)
+    manager.stop()
+  })
+
+  it("does not let a deferred refresh from an old session touch the restarted session", async () => {
+    mockGetRandomUUID.mockReturnValueOnce("old-walk").mockReturnValueOnce("new-walk")
+    document.body.innerHTML = `
+      <p id="tweet"><span id="source">Initial tweet</span></p>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const source = document.getElementById("source")!.firstChild as Text
+    const createState = (walkId: string): BilingualTranslationState => {
+      const wrapper = document.createElement("span")
+      wrapper.className = "read-frog-translated-content-wrapper"
+      wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+      const state: BilingualTranslationState = {
+        layoutSource: tweet,
+        sourceTextContent: source.data,
+        status: "active",
+        walkId,
+        wrapper,
+        wrapperTextContent: null,
+      }
+      tweet.append(wrapper)
+      registerBilingualTranslationState(state)
+      return state
+    }
+
+    let resolveOldRefresh!: () => void
+    let resolveNewRefresh!: () => void
+    const oldRefresh = new Promise<void>((resolve) => {
+      resolveOldRefresh = resolve
+    })
+    const newRefresh = new Promise<void>((resolve) => {
+      resolveNewRefresh = resolve
+    })
+    let activeOldState: BilingualTranslationState | undefined
+    let activeNewState: BilingualTranslationState | undefined
+    let newWalkCalls = 0
+    mockTranslateNodesBilingualMode.mockImplementation(async (_nodes, walkId) => {
+      if (walkId === "old-walk") {
+        if (activeOldState) {
+          unregisterBilingualTranslationState(activeOldState)
+          activeOldState.wrapper?.remove()
+          activeOldState = undefined
+        }
+        await oldRefresh
+      } else if (walkId === "new-walk") {
+        if (activeNewState) {
+          unregisterBilingualTranslationState(activeNewState)
+          activeNewState.wrapper?.remove()
+        }
+        activeNewState = createState("new-walk")
+        newWalkCalls += 1
+        if (newWalkCalls === 1) await newRefresh
+      }
+    })
+
+    activeOldState = createState("old-walk")
+    await flushDomUpdates()
+    mockTranslateNodesBilingualMode.mockClear()
+    source.data = "Old session mutation"
+    await flushDomUpdates()
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(1)
+
+    manager.stop()
+    await manager.start()
+    await flushDomUpdates()
+
+    activeNewState = createState("new-walk")
+    source.data = "New session mutation one"
+    await flushDomUpdates()
+    source.data = "New session mutation two"
+    await flushDomUpdates()
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(2)
+
+    resolveOldRefresh()
+    await flushDomUpdates()
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(2)
+
+    resolveNewRefresh()
+    await flushDomUpdates()
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(3)
+    expect(mockTranslateNodesBilingualMode.mock.calls.map((call) => call[1])).toEqual([
+      "old-walk",
+      "new-walk",
+      "new-walk",
+    ])
+
+    if (activeNewState) {
+      unregisterBilingualTranslationState(activeNewState)
+      activeNewState.wrapper?.remove()
+    }
+    manager.stop()
+  })
+
+  it("ignores the extension's own wrapper and error-host insertions (#1831)", async () => {
+    document.body.innerHTML = `
+      <p id="tweet"><span id="source">Original tweet</span></p>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const wrapper = document.createElement("span")
+    wrapper.className = "notranslate read-frog-translated-content-wrapper"
+    wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+    tweet.append(wrapper)
+    const state: BilingualTranslationState = {
+      layoutSource: tweet,
+      sourceTextContent: "Original tweet",
+      status: "active",
+      walkId: "walk-id",
+      wrapper,
+      wrapperTextContent: null,
+    }
+    registerBilingualTranslationState(state)
+    await flushDomUpdates()
+    mockWalkAndLabelElement.mockClear()
+    mockTranslateNodesBilingualMode.mockClear()
+
+    // Everything the extension inserts during a translation pass: translated
+    // text inside the wrapper, an error shadow host, and a sibling wrapper.
+    wrapper.append("译文文本")
+    const errorHost = document.createElement("div")
+    errorHost.className = "read-frog-react-shadow-host"
+    wrapper.append(errorHost)
+    const siblingWrapper = document.createElement("span")
+    siblingWrapper.className = "notranslate read-frog-translated-content-wrapper"
+    tweet.append(siblingWrapper)
+    await flushDomUpdates()
+
+    expect(mockWalkAndLabelElement).not.toHaveBeenCalled()
+    expect(mockTranslateNodesBilingualMode).not.toHaveBeenCalled()
+
+    unregisterBilingualTranslationState(state)
+    manager.stop()
+  })
+
+  it("ignores temporary wrappers around unchanged text inside a translated source (#2185)", async () => {
+    document.body.innerHTML = `<p id="summary">Original summary</p>`
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observer = intersectionObservers[0]!
+    const summary = document.getElementById("summary") as HTMLElement
+    const source = summary.firstChild as Text
+    const wrapper = document.createElement("span")
+    wrapper.className = "notranslate read-frog-translated-content-wrapper"
+    wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+    wrapper.append("译文")
+    summary.append(wrapper)
+    const state: BilingualTranslationState = {
+      layoutSource: summary,
+      sourceTextContent: "Original summary",
+      status: "active",
+      walkId: "walk-id",
+      wrapper,
+      wrapperTextContent: "译文",
+    }
+    registerBilingualTranslationState(state)
+    await flushDomUpdates()
+    observer.observe.mockClear()
+    mockWalkAndLabelElement.mockClear()
+    mockTranslateNodesBilingualMode.mockClear()
+
+    // Google AI Overview citation hover temporarily moves the existing Text
+    // node into a decorator, then unwraps it while preserving child nodes.
+    for (let i = 0; i < 3; i += 1) {
+      const decorator = document.createElement("span")
+      decorator.className = "yADgie"
+      decorator.append(source)
+      summary.prepend(decorator)
+      await flushDomUpdates()
+
+      summary.insertBefore(source, decorator)
+      decorator.remove()
+      await flushDomUpdates()
+    }
+
+    expect(observer.observe).not.toHaveBeenCalled()
+    expect(mockWalkAndLabelElement).not.toHaveBeenCalled()
+    expect(mockTranslateNodesBilingualMode).not.toHaveBeenCalled()
+    expect(summary.querySelectorAll(".read-frog-translated-content-wrapper")).toHaveLength(1)
+
+    unregisterBilingualTranslationState(state)
+    manager.stop()
+  })
+
+  it("does not promote a node added into a STALE bilingual source to its own unit (#2185)", async () => {
+    // The shipped #2186 guard only fired while the enclosing source was still
+    // CURRENT. A genuine mid-sentence insertion makes it stale, so the addition
+    // fell through and observeTopLevelParagraphs promoted the inline span to a
+    // unit of its own -- the same defect, on the other half of the branch.
+    document.body.innerHTML = `<p id="summary">Original summary</p>`
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observer = intersectionObservers[0]!
+    const summary = document.getElementById("summary") as HTMLElement
+    const wrapper = document.createElement("span")
+    wrapper.className = "notranslate read-frog-translated-content-wrapper"
+    wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+    wrapper.append("译文")
+    summary.append(wrapper)
+    const state: BilingualTranslationState = {
+      layoutSource: summary,
+      sourceTextContent: "Original summary",
+      status: "active",
+      walkId: "walk-id",
+      wrapper,
+      wrapperTextContent: "译文",
+    }
+    registerBilingualTranslationState(state)
+    await flushDomUpdates()
+    observer.observe.mockClear()
+    mockWalkAndLabelElement.mockClear()
+    mockTranslateNodesBilingualMode.mockClear()
+
+    try {
+      // A genuinely new inline run mid-sentence: the source's host text changes,
+      // so the state goes stale and the budgeted retranslation path owns it.
+      const inserted = document.createElement("span")
+      inserted.textContent = " and a newly inserted clause"
+      summary.insertBefore(inserted, wrapper)
+      await flushDomUpdates()
+
+      // The addition must never become a walk root of its own.
+      expect(observer.observe).not.toHaveBeenCalledWith(inserted)
+      expect(mockWalkAndLabelElement.mock.calls.some(([element]) => element === inserted)).toBe(
+        false,
+      )
+
+      // ...but the enclosing unit still recovers, exactly once.
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(1)
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledWith(
+        [summary],
+        expect.any(String),
+        DEFAULT_CONFIG,
+      )
+    } finally {
+      unregisterBilingualTranslationState(state)
+      manager.stop()
+    }
+  })
+
+  it("still walks additions that are not inside any registered source", async () => {
+    // Anti-dead-zone guard: the currency-independent skip must not swallow
+    // ordinary infinite-scroll content appended beside a translated paragraph.
+    document.body.innerHTML = `<div id="feed"><p id="first">First paragraph</p></div>`
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observer = intersectionObservers[0]!
+    const feed = document.getElementById("feed") as HTMLElement
+    const first = document.getElementById("first") as HTMLElement
+    const wrapper = document.createElement("span")
+    wrapper.className = "notranslate read-frog-translated-content-wrapper"
+    wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+    wrapper.append("译文")
+    first.append(wrapper)
+    const state: BilingualTranslationState = {
+      layoutSource: first,
+      sourceTextContent: "First paragraph",
+      status: "active",
+      walkId: "walk-id",
+      wrapper,
+      wrapperTextContent: "译文",
+    }
+    registerBilingualTranslationState(state)
+    await flushDomUpdates()
+    observer.observe.mockClear()
+    mockWalkAndLabelElement.mockClear()
+
+    try {
+      const second = document.createElement("p")
+      second.id = "second"
+      second.textContent = "Second paragraph"
+      feed.append(second)
+      await flushDomUpdates()
+
+      expect(mockWalkAndLabelElement.mock.calls.some(([element]) => element === second)).toBe(true)
+      expect(observer.observe).toHaveBeenCalledWith(second)
+    } finally {
+      unregisterBilingualTranslationState(state)
+      manager.stop()
+    }
+  })
+
+  it("does not match translationOnly anchors, so their additions keep being walked", async () => {
+    // The guard reads only the bilingual registries, so it is structurally inert
+    // in translationOnly sessions. That is load-bearing, not incidental:
+    // translationOnly staleness is RUN-scoped (isTranslationOnlySwapRecordCurrent
+    // recurses only into record.runNodes), so a node appended BESIDE a recorded
+    // run can never make the anchor stale. Matching anchors here would turn them
+    // into permanent no-walk dead zones with nothing to rescue the addition.
+    document.body.innerHTML = `<p id="bio">你好世界</p>`
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observer = intersectionObservers[0]!
+    const bio = document.getElementById("bio") as HTMLElement
+    registerTranslationOnlyAnchorState({
+      anchor: bio,
+      attributeAdjustments: [],
+      swaps: [],
+    })
+    await flushDomUpdates()
+    observer.observe.mockClear()
+    mockWalkAndLabelElement.mockClear()
+
+    try {
+      const added = document.createElement("span")
+      added.textContent = "A later untranslated clause"
+      bio.append(added)
+      await flushDomUpdates()
+
+      expect(mockWalkAndLabelElement.mock.calls.some(([element]) => element === added)).toBe(true)
+      expect(observer.observe).toHaveBeenCalledWith(added)
+    } finally {
+      unregisterTranslationOnlyAnchorState(bio)
+      manager.stop()
+    }
+  })
+
+  it("ignores decorators inside current virtual paragraph groups but retranslates text changes", async () => {
+    document.body.innerHTML = `<div id="summary" style="white-space: pre-wrap"><span>First paragraph</span>\n\n<span>Second paragraph</span></div>`
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observer = intersectionObservers[0]!
+    const summary = document.getElementById("summary") as HTMLElement
+    const sourceSpan = summary.firstElementChild as HTMLElement
+    const source = sourceSpan.firstChild as Text
+    const group: VirtualParagraphGroup = {
+      id: "virtual-group",
+      walkId: "walk-id",
+      status: "active",
+      layoutSource: summary,
+      wrappers: new Set(),
+      splitRecords: [],
+      sourceSnapshots: [...summary.childNodes].map((node) => ({
+        source: node as Text | HTMLElement,
+        parent: summary,
+        value: node.textContent ?? "",
+      })),
+      sourceTextContent: summary.textContent ?? "",
+      wrapperPlacements: new Map(),
+    }
+    for (const span of [...summary.children]) {
+      const wrapper = document.createElement("span")
+      wrapper.className = "notranslate read-frog-translated-content-wrapper"
+      wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+      wrapper.textContent = "译文"
+      span.after(wrapper)
+      group.wrappers.add(wrapper)
+    }
+    registerVirtualParagraphGroup(group)
+    markVirtualParagraphGroupInserted(group)
+    await flushDomUpdates()
+    observer.observe.mockClear()
+    mockWalkAndLabelElement.mockClear()
+    mockTranslateNodesBilingualMode.mockClear()
+
+    try {
+      for (let i = 0; i < 3; i += 1) {
+        // The atomic inline source stays in place; only its descendant Text
+        // moves, so the group's snapshots and wrapper placement remain valid.
+        const decorator = document.createElement("span")
+        decorator.append(source)
+        sourceSpan.append(decorator)
+        await flushDomUpdates()
+        expect(isVirtualParagraphGroupCurrent(group)).toBe(true)
+
+        sourceSpan.insertBefore(source, decorator)
+        decorator.remove()
+        await flushDomUpdates()
+      }
+      expect(observer.observe).not.toHaveBeenCalled()
+      expect(mockWalkAndLabelElement).not.toHaveBeenCalled()
+      expect(mockTranslateNodesBilingualMode).not.toHaveBeenCalled()
+      expect(summary.querySelectorAll(".read-frog-translated-content-wrapper")).toHaveLength(2)
+
+      source.data = "Updated first paragraph"
+      await flushDomUpdates()
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledExactlyOnceWith(
+        [summary],
+        "walk-id",
+        DEFAULT_CONFIG,
+      )
+    } finally {
+      unregisterVirtualParagraphGroup(group)
+      manager.stop()
+    }
+  })
+
+  it.each([
+    ["childList", 1],
+    ["characterData", 1],
+    ["childList", 2],
+    ["characterData", 2],
+    ["childList", 3],
+    ["characterData", 3],
+  ] as const)(
+    "handles %s after sibling CSS reveals a depth-%i shadow tree",
+    async (mutationType, depth) => {
+      document.head.innerHTML = `<style>.collapsed + [data-shadow-host] { display: none; }</style>`
+      document.body.innerHTML = `<p id="summary">Original summary</p>`
+      mockIsDontWalkIntoAndDontTranslateAsChildElement.mockImplementation(
+        (element: HTMLElement) =>
+          isBlockedForTraversal(element) || getComputedStyle(element).display === "none",
+      )
+      const manager = new PageTranslationManager()
+      await manager.start()
+      await flushDomUpdates()
+
+      const summary = document.getElementById("summary") as HTMLElement
+      const wrapper = document.createElement("span")
+      wrapper.className = "notranslate read-frog-translated-content-wrapper"
+      wrapper.textContent = "译文"
+      summary.append(wrapper)
+      const state: BilingualTranslationState = {
+        layoutSource: summary,
+        sourceTextContent: "Original summary",
+        status: "active",
+        walkId: "walk-id",
+        wrapper,
+        wrapperTextContent: "译文",
+      }
+      registerBilingualTranslationState(state)
+      let shadowState: BilingualTranslationState | undefined
+      try {
+        const controller = document.createElement("span")
+        controller.className = "collapsed"
+        const host = document.createElement("span")
+        host.setAttribute("data-shadow-host", "")
+        let innerHost = host
+        let container = document.createElement("div")
+        for (let index = 0; index < Math.min(depth, 2); index += 1) {
+          container = document.createElement("div")
+          innerHost.attachShadow({ mode: "open" }).append(container)
+          if (index + 1 < Math.min(depth, 2)) {
+            innerHost = document.createElement("span")
+            container.append(innerHost)
+          }
+        }
+        const paragraph = document.createElement("p")
+        paragraph.textContent = "Initial shadow content"
+        container.append(paragraph)
+        summary.prepend(controller, host)
+        await flushDomUpdates()
+        if (depth === 3) {
+          // Discover additional isolated roots even when their insertion is
+          // reported by an observer inside a currently blocked outer host.
+          const addedHost = document.createElement("span")
+          const addedContainer = document.createElement("div")
+          addedHost.attachShadow({ mode: "open" }).append(addedContainer)
+          addedContainer.append(paragraph)
+          container.append(addedHost)
+          container = addedContainer
+          await flushDomUpdates()
+        }
+        const observer = intersectionObservers[0]!
+        expect(observer.observe).not.toHaveBeenCalledWith(paragraph)
+        mockWalkAndLabelElement.mockClear()
+        observer.observe.mockClear()
+
+        const hiddenParagraph = document.createElement("p")
+        hiddenParagraph.textContent = "Added while hidden"
+        container.append(hiddenParagraph)
+        await flushDomUpdates()
+        expect(mockWalkAndLabelElement).not.toHaveBeenCalled()
+        expect(observer.observe).not.toHaveBeenCalled()
+
+        controller.classList.remove("collapsed")
+        await flushDomUpdates()
+        mockWalkAndLabelElement.mockClear()
+        const changedParagraph =
+          mutationType === "childList" ? document.createElement("p") : paragraph
+        if (mutationType === "childList") {
+          changedParagraph.textContent = "Visible shadow update"
+          container.append(changedParagraph)
+        } else {
+          ;(changedParagraph.firstChild as Text).data = "Visible shadow update"
+        }
+        await flushDomUpdates()
+        expect(observer.observe).toHaveBeenCalledWith(changedParagraph)
+        expect(mockWalkAndLabelElement).toHaveBeenCalledTimes(1)
+        await observer.triggerIntersect(changedParagraph)
+        await flushDomUpdates()
+        expect(mockTranslateWalkedElement).toHaveBeenCalledWith(
+          changedParagraph,
+          "walk-id",
+          DEFAULT_CONFIG,
+          false,
+          expect.anything(),
+          expect.anything(),
+        )
+
+        const shadowWrapper = document.createElement("span")
+        shadowWrapper.className = "notranslate read-frog-translated-content-wrapper"
+        shadowWrapper.textContent = "新译文"
+        changedParagraph.append(shadowWrapper)
+        shadowState = {
+          layoutSource: changedParagraph,
+          sourceTextContent: "Visible shadow update",
+          status: "active",
+          walkId: "walk-id",
+          wrapper: shadowWrapper,
+          wrapperTextContent: "新译文",
+        }
+        registerBilingualTranslationState(shadowState)
+        await flushDomUpdates()
+        mockTranslateNodesBilingualMode.mockClear()
+        controller.classList.add("collapsed")
+        await flushDomUpdates()
+        ;(changedParagraph.firstChild as Text).data = "Hidden text edit"
+        await flushDomUpdates()
+        expect(mockTranslateNodesBilingualMode).not.toHaveBeenCalled()
+
+        controller.classList.remove("collapsed")
+        await flushDomUpdates()
+        expect(mockTranslateNodesBilingualMode).toHaveBeenCalledExactlyOnceWith(
+          [changedParagraph],
+          "walk-id",
+          DEFAULT_CONFIG,
+        )
+      } finally {
+        if (shadowState) unregisterBilingualTranslationState(shadowState)
+        unregisterBilingualTranslationState(state)
+        manager.stop()
+      }
+    },
+  )
+
+  it.each(["reveal", "detach", "stop"])(
+    "retains blocked stale sources until %s",
+    async (action) => {
+      const host = document.createElement("span")
+      const container = document.createElement("div")
+      container.innerHTML = `<p>Initial content</p>`
+      host.attachShadow({ mode: "open" }).append(container)
+      document.body.append(host)
+      mockIsDontWalkIntoButTranslateAsChildElement.mockImplementation((element: HTMLElement) =>
+        element.classList.contains("notranslate"),
+      )
+      mockHasNoWalkAncestor.mockImplementation((element: HTMLElement) => {
+        let parent = element.parentElement
+        while (parent) {
+          if (isBlockedForTraversal(parent) || parent.classList.contains("notranslate")) return true
+          parent = parent.parentElement
+        }
+        return false
+      })
+      const manager = new PageTranslationManager()
+      await manager.start()
+      await flushDomUpdates()
+
+      const paragraph = container.firstElementChild as HTMLElement
+      const source = paragraph.firstChild as Text
+      const wrapper = document.createElement("span")
+      wrapper.className = "notranslate read-frog-translated-content-wrapper"
+      wrapper.textContent = "译文"
+      paragraph.append(wrapper)
+      const state: BilingualTranslationState = {
+        layoutSource: paragraph,
+        sourceTextContent: "Initial content",
+        status: "active",
+        walkId: "walk-id",
+        wrapper,
+        wrapperTextContent: "译文",
+      }
+      registerBilingualTranslationState(state)
+      try {
+        await flushDomUpdates()
+        mockWalkAndLabelElement.mockClear()
+        mockTranslateNodesBilingualMode.mockClear()
+        container.classList.add("notranslate")
+        await flushDomUpdates()
+        source.data = "Edit while excluded"
+        await flushDomUpdates()
+        source.data = "Latest edit while excluded"
+        await flushDomUpdates()
+        expect(mockWalkAndLabelElement).not.toHaveBeenCalled()
+        expect(mockTranslateNodesBilingualMode).not.toHaveBeenCalled()
+
+        host.hidden = true
+        await flushDomUpdates()
+        container.classList.remove("notranslate")
+        await flushDomUpdates()
+        expect(mockTranslateNodesBilingualMode).not.toHaveBeenCalled()
+        if (action === "detach") host.remove()
+        if (action === "stop") manager.stop()
+        host.hidden = false
+        await flushDomUpdates()
+        document.body.classList.add("unrelated-change")
+        await flushDomUpdates()
+        expect(source.data).toBe("Latest edit while excluded")
+        expect(mockTranslateNodesBilingualMode.mock.calls).toEqual(
+          action === "reveal" ? [[[paragraph], "walk-id", DEFAULT_CONFIG]] : [],
+        )
+      } finally {
+        unregisterBilingualTranslationState(state)
+        manager.stop()
+      }
+    },
+  )
+
+  it.each([8, 64])("bounds ancestor checks when inserting a subtree of depth %i", async (depth) => {
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    try {
+      const container = document.createElement("div")
+      let leaf = container
+      for (let index = 1; index < depth; index += 1) {
+        const child = document.createElement("div")
+        leaf.append(child)
+        leaf = child
+      }
+      const paragraph = document.createElement("p")
+      paragraph.textContent = "Deeply nested content"
+      leaf.append(paragraph)
+      mockHasNoWalkAncestor.mockClear()
+
+      document.body.append(container)
+      await flushDomUpdates()
+
+      // One check for labeling and one for isolated observer discovery;
+      // neither should walk the ancestor chain again for every descendant.
+      expect(mockHasNoWalkAncestor.mock.calls.map(([element]) => element)).toEqual([
+        container,
+        container,
+      ])
+      expect(intersectionObservers[0]!.observe).toHaveBeenCalledWith(paragraph)
+    } finally {
+      manager.stop()
+    }
+  })
+
+  it.each(["current source", "new source", "unblocked source"])(
+    "walks nested shadow content once under a %s (#2185)",
+    async (sourceKind) => {
+      document.body.innerHTML = `<p id="summary">Original summary</p>`
+
+      const manager = new PageTranslationManager()
+      await manager.start()
+      await flushDomUpdates()
+
+      const observer = intersectionObservers[0]!
+      const summary = document.getElementById("summary") as HTMLElement
+      const wrapper = document.createElement("span")
+      wrapper.className = "notranslate read-frog-translated-content-wrapper"
+      wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+      wrapper.append("译文")
+      summary.append(wrapper)
+      const state: BilingualTranslationState = {
+        layoutSource: summary,
+        sourceTextContent: "Original summary",
+        status: "active",
+        walkId: "walk-id",
+        wrapper,
+        wrapperTextContent: "译文",
+      }
+      if (sourceKind === "current source") registerBilingualTranslationState(state)
+      await flushDomUpdates()
+      observer.observe.mockClear()
+
+      const host = document.createElement("span")
+      const shadowRoot = host.attachShadow({ mode: "open" })
+      const shadowContainer = document.createElement("div")
+      shadowContainer.innerHTML = `<p id="shadow-paragraph">New shadow content</p>`
+      shadowRoot.append(shadowContainer)
+      const paragraphs = [shadowContainer.firstElementChild as HTMLElement]
+      let innermostContainer = shadowContainer
+      for (let depth = 1; depth < 4; depth += 1) {
+        const nestedHost = document.createElement("span")
+        const nestedContainer = document.createElement("div")
+        nestedContainer.innerHTML = `<p>Shadow content at depth ${depth}</p>`
+        nestedHost.attachShadow({ mode: "open" }).append(nestedContainer)
+        innermostContainer.append(nestedHost)
+        innermostContainer = nestedContainer
+        paragraphs.push(nestedContainer.firstElementChild as HTMLElement)
+      }
+      host.hidden = sourceKind === "unblocked source"
+      mockWalkAndLabelElement.mockClear()
+      try {
+        summary.prepend(host)
+        await flushDomUpdates()
+
+        if (sourceKind === "unblocked source") {
+          mockWalkAndLabelElement.mockClear()
+          host.hidden = false
+          await flushDomUpdates()
+        }
+        expect(mockWalkAndLabelElement).toHaveBeenCalledExactlyOnceWith(
+          sourceKind === "current source" ? shadowContainer : host,
+          "walk-id",
+          DEFAULT_CONFIG,
+          expect.anything(),
+        )
+        for (const paragraph of paragraphs) {
+          expect(observer.observe).toHaveBeenCalledWith(paragraph)
+        }
+
+        // Register every nested observer even though labeling starts only once.
+        observer.observe.mockClear()
+        mockWalkAndLabelElement.mockClear()
+        const laterParagraph = document.createElement("p")
+        laterParagraph.textContent = "Later innermost content"
+        innermostContainer.append(laterParagraph)
+        await flushDomUpdates()
+        expect(observer.observe).toHaveBeenCalledExactlyOnceWith(laterParagraph)
+        expect(mockWalkAndLabelElement).toHaveBeenCalledTimes(1)
+      } finally {
+        unregisterBilingualTranslationState(state)
+        manager.stop()
+      }
+    },
+  )
+
+  it.each([
+    ["host", "class", "notranslate"],
+    ["ancestor", "class", "notranslate"],
+    ["host", "hidden", ""],
+    ["ancestor", "hidden", ""],
+    ["host", "aria-hidden", "true"],
+    ["ancestor", "aria-hidden", "true"],
+    ["nested host", "class", "notranslate"],
+    ["nested host", "hidden", ""],
+    ["nested host", "aria-hidden", "true"],
+    ["nested shadow host", "class", "notranslate"],
+    ["nested shadow host", "hidden", ""],
+    ["nested shadow host", "aria-hidden", "true"],
+    ["nested dynamic shadow host", "class", "notranslate"],
+    ["nested dynamic shadow host", "hidden", ""],
+    ["nested dynamic shadow host", "aria-hidden", "true"],
+    ["ancestor selector", "class", "collapsed"],
+    ["ancestor selector", "aria-hidden", "true"],
+  ])(
+    "observes later shadow mutations after a blocked %s (%s) becomes walkable",
+    async (blockedTarget, attribute, value) => {
+      document.body.innerHTML = `<p id="summary">Original summary</p>`
+
+      const manager = new PageTranslationManager()
+      await manager.start()
+      await flushDomUpdates()
+
+      const observer = intersectionObservers[0]!
+      const summary = document.getElementById("summary") as HTMLElement
+      const wrapper = document.createElement("span")
+      wrapper.className = "notranslate read-frog-translated-content-wrapper"
+      wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+      wrapper.append("译文")
+      summary.append(wrapper)
+      const state: BilingualTranslationState = {
+        layoutSource: summary,
+        sourceTextContent: "Original summary",
+        status: "active",
+        walkId: "walk-id",
+        wrapper,
+        wrapperTextContent: "译文",
+      }
+      registerBilingualTranslationState(state)
+      await flushDomUpdates()
+      observer.observe.mockClear()
+      mockWalkAndLabelElement.mockClear()
+      mockIsDontWalkIntoButTranslateAsChildElement.mockImplementation((element: HTMLElement) =>
+        element.classList.contains("notranslate"),
+      )
+
+      mockHasNoWalkAncestor.mockImplementation((element: HTMLElement) => {
+        let parent = element.parentElement
+        while (parent) {
+          if (isBlockedForTraversal(parent) || parent.classList.contains("notranslate")) return true
+          parent = parent.parentElement
+        }
+        return false
+      })
+
+      const host = document.createElement("span")
+      const blockedElement = blockedTarget === "host" ? host : document.createElement("span")
+      if (blockedTarget.includes("shadow host")) {
+        blockedElement.attachShadow({ mode: "open" }).append(host)
+      } else if (blockedElement !== host) {
+        blockedElement.append(host)
+      }
+      if (blockedTarget === "ancestor selector") {
+        document.head.innerHTML = `<style>
+          [data-css-container].collapsed [data-css-hidden],
+          [data-css-container][aria-hidden="true"] [data-css-hidden] { display: none; }
+        </style>`
+        blockedElement.setAttribute("data-css-container", "")
+        host.setAttribute("data-css-hidden", "")
+        mockIsDontWalkIntoAndDontTranslateAsChildElement.mockImplementation(
+          (element: HTMLElement) =>
+            isBlockedForTraversal(element) || getComputedStyle(element).display === "none",
+        )
+      } else {
+        blockedElement.setAttribute("data-site-rule-blocked", "")
+      }
+      blockedElement.setAttribute(attribute, value)
+      if (blockedTarget.startsWith("nested")) {
+        host.setAttribute("data-site-rule-blocked", "")
+        host.setAttribute(attribute, value)
+      }
+      const shadowRoot = host.attachShadow({ mode: "open" })
+      const shadowContainer = document.createElement("div")
+      shadowContainer.innerHTML = `<p id="blocked-shadow-paragraph">Blocked shadow content</p>`
+      shadowRoot.append(shadowContainer)
+      summary.prepend(blockedElement)
+      await flushDomUpdates()
+
+      const shadowParagraph = shadowRoot.getElementById("blocked-shadow-paragraph") as HTMLElement
+      expect(observer.observe).not.toHaveBeenCalledWith(shadowParagraph)
+      expect(mockWalkAndLabelElement).not.toHaveBeenCalledWith(
+        shadowContainer,
+        "walk-id",
+        DEFAULT_CONFIG,
+        expect.anything(),
+      )
+
+      blockedElement.removeAttribute(attribute)
+      await flushDomUpdates()
+
+      let mutationContainer = shadowContainer
+      if (blockedTarget === "nested dynamic shadow host") {
+        // The still-blocked top-level shadow child has its own observer so it
+        // can detect unblocking. Adding a host beneath it must retain the gate.
+        const addedHost = document.createElement("span")
+        mutationContainer = document.createElement("div")
+        addedHost.attachShadow({ mode: "open" }).append(mutationContainer)
+        host.append(addedHost)
+        await flushDomUpdates()
+      }
+      observer.observe.mockClear()
+
+      // Unblocking the outer ancestor must preserve any remaining inner gate,
+      // including for content added while that host is still blocked.
+      mockWalkAndLabelElement.mockClear()
+      const paragraphAfterOuterUnblock = document.createElement("p")
+      paragraphAfterOuterUnblock.textContent = "Content added after the outer element opens"
+      mutationContainer.append(paragraphAfterOuterUnblock)
+      await flushDomUpdates()
+
+      const stillBlocked = blockedTarget.startsWith("nested")
+      expect(observer.observe).toHaveBeenCalledTimes(stillBlocked ? 0 : 1)
+      expect(mockWalkAndLabelElement).toHaveBeenCalledTimes(stillBlocked ? 0 : 1)
+
+      if (stillBlocked) host.removeAttribute(attribute)
+      await flushDomUpdates()
+      expect(observer.observe).toHaveBeenCalledWith(paragraphAfterOuterUnblock)
+      observer.observe.mockClear()
+
+      const laterParagraph = document.createElement("p")
+      laterParagraph.textContent = "Content added after unblocking"
+      mutationContainer.append(laterParagraph)
+      await flushDomUpdates()
+
+      expect(observer.observe).toHaveBeenCalledWith(laterParagraph)
+      await observer.triggerIntersect(laterParagraph)
+      await flushDomUpdates()
+      expect(mockTranslateWalkedElement).toHaveBeenCalledWith(
+        laterParagraph,
+        "walk-id",
+        DEFAULT_CONFIG,
+        false,
+        expect.anything(),
+        expect.anything(),
+      )
+
+      // Text edits must also reach the stale-source retranslation path.
+      const shadowWrapper = document.createElement("span")
+      shadowWrapper.className = "notranslate read-frog-translated-content-wrapper"
+      shadowWrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+      shadowWrapper.textContent = "后续译文"
+      laterParagraph.append(shadowWrapper)
+      const shadowState: BilingualTranslationState = {
+        layoutSource: laterParagraph,
+        sourceTextContent: "Content added after unblocking",
+        status: "active",
+        walkId: "walk-id",
+        wrapper: shadowWrapper,
+        wrapperTextContent: "后续译文",
+      }
+      registerBilingualTranslationState(shadowState)
+      await flushDomUpdates()
+      mockTranslateNodesBilingualMode.mockClear()
+
+      ;(laterParagraph.firstChild as Text).data = "Updated shadow content"
+      await flushDomUpdates()
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledExactlyOnceWith(
+        [laterParagraph],
+        "walk-id",
+        DEFAULT_CONFIG,
+      )
+
+      unregisterBilingualTranslationState(shadowState)
+      unregisterBilingualTranslationState(state)
+      manager.stop()
+    },
+  )
+
+  it("retranslates exactly once when the site re-renders a node containing our wrapper (#1831)", async () => {
+    document.body.innerHTML = `
+      <p id="tweet"><span id="source">Original content</span></p>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const createState = (sourceText: string): BilingualTranslationState => {
+      const wrapper = document.createElement("span")
+      wrapper.className = "notranslate read-frog-translated-content-wrapper"
+      wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+      wrapper.append(`${sourceText} 的译文`)
+      tweet.append(wrapper)
+      const state: BilingualTranslationState = {
+        layoutSource: tweet,
+        sourceTextContent: sourceText,
+        status: "active",
+        walkId: "walk-id",
+        wrapper,
+        wrapperTextContent: null,
+      }
+      registerBilingualTranslationState(state)
+      return state
+    }
+
+    let activeState = createState("Original content")
+    await flushDomUpdates()
+    mockTranslateNodesBilingualMode.mockClear()
+    mockTranslateNodesBilingualMode.mockImplementation(async () => {
+      // The real translation dance: tear down the stale generation, insert a
+      // fresh wrapper, re-register state for the current host text.
+      unregisterBilingualTranslationState(activeState)
+      if (activeState.wrapper) {
+        markExtensionDrivenNodeRemoval(activeState.wrapper)
+        activeState.wrapper.remove()
+      }
+      activeState = createState("Re-rendered content")
+    })
+
+    // Site re-render: replace the source span wholesale (framework-style).
+    const oldSpan = document.getElementById("source") as HTMLElement
+    const newSpan = document.createElement("span")
+    newSpan.id = "source"
+    newSpan.textContent = "Re-rendered content"
+    tweet.replaceChild(newSpan, oldSpan)
+    await flushDomUpdates()
+    await flushDomUpdates()
+    await flushDomUpdates()
+
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(1)
+    expect(document.querySelectorAll(".read-frog-translated-content-wrapper").length).toBe(1)
+
+    unregisterBilingualTranslationState(activeState)
+    manager.stop()
+  })
+
+  it("still retranslates once when the site removes our wrapper (#1831)", async () => {
+    document.body.innerHTML = `
+      <p id="tweet"><span id="source">Original content</span></p>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const wrapper = document.createElement("span")
+    wrapper.className = "notranslate read-frog-translated-content-wrapper"
+    wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+    wrapper.append("译文文本")
+    tweet.append(wrapper)
+    const state: BilingualTranslationState = {
+      layoutSource: tweet,
+      sourceTextContent: "Original content",
+      status: "active",
+      walkId: "walk-id",
+      wrapper,
+      wrapperTextContent: null,
+    }
+    registerBilingualTranslationState(state)
+    await flushDomUpdates()
+    mockTranslateNodesBilingualMode.mockClear()
+    mockTranslateNodesBilingualMode.mockImplementation(async () => {
+      unregisterBilingualTranslationState(state)
+    })
+
+    // Site-driven removal — NOT marked as extension-initiated.
+    wrapper.remove()
+    await flushDomUpdates()
+
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(1)
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledWith([tweet], "walk-id", DEFAULT_CONFIG)
+
+    manager.stop()
+  })
+
+  it("retranslates when the site rewrites text inside our wrapper (#1918)", async () => {
+    document.body.innerHTML = `
+      <p id="tweet"><span id="source">English title</span></p>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const wrapper = document.createElement("span")
+    wrapper.className = "notranslate read-frog-translated-content-wrapper"
+    wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+    wrapper.append("中文译文")
+    tweet.append(wrapper)
+    const state: BilingualTranslationState = {
+      layoutSource: tweet,
+      sourceTextContent: "English title",
+      status: "active",
+      walkId: "walk-id",
+      wrapper,
+      wrapperTextContent: wrapper.textContent,
+    }
+    registerBilingualTranslationState(state)
+    await flushDomUpdates()
+    mockTranslateNodesBilingualMode.mockClear()
+    mockTranslateNodesBilingualMode.mockImplementation(async () => {
+      unregisterBilingualTranslationState(state)
+    })
+
+    // CNBC-style truncation script: a characterData write on the text node
+    // INSIDE our wrapper, replacing the translation with clipped English.
+    const translatedTextNode = wrapper.firstChild as Text
+    translatedTextNode.data = "English title…"
+    await flushDomUpdates()
+
+    expect(mockWalkAndLabelElement).toHaveBeenCalledWith(tweet, "walk-id", DEFAULT_CONFIG)
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(1)
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledWith([tweet], "walk-id", DEFAULT_CONFIG)
+
+    manager.stop()
+  })
+
+  it("retranslates when the site replaces our translated node inside the wrapper (#1918)", async () => {
+    document.body.innerHTML = `
+      <p id="tweet"><span id="source">English title</span></p>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const wrapper = document.createElement("span")
+    wrapper.className = "notranslate read-frog-translated-content-wrapper"
+    wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+    wrapper.append("中文译文")
+    tweet.append(wrapper)
+    const state: BilingualTranslationState = {
+      layoutSource: tweet,
+      sourceTextContent: "English title",
+      status: "active",
+      walkId: "walk-id",
+      wrapper,
+      wrapperTextContent: wrapper.textContent,
+    }
+    registerBilingualTranslationState(state)
+    await flushDomUpdates()
+    mockTranslateNodesBilingualMode.mockClear()
+    mockTranslateNodesBilingualMode.mockImplementation(async () => {
+      unregisterBilingualTranslationState(state)
+    })
+
+    // Framework-style childList tamper: our text node swapped for a site span.
+    const siteSpan = document.createElement("span")
+    siteSpan.textContent = "English title…"
+    wrapper.replaceChildren(siteSpan)
+    await flushDomUpdates()
+
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(1)
+    expect(mockTranslateNodesBilingualMode).toHaveBeenCalledWith([tweet], "walk-id", DEFAULT_CONFIG)
+
+    manager.stop()
+  })
+
+  it("ignores in-wrapper mutations that leave the wrapper text unchanged (#1918)", async () => {
+    document.body.innerHTML = `
+      <p id="tweet"><span id="source">English title</span></p>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const wrapper = document.createElement("span")
+    wrapper.className = "notranslate read-frog-translated-content-wrapper"
+    wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+    wrapper.append("中文译文")
+    tweet.append(wrapper)
+    const state: BilingualTranslationState = {
+      layoutSource: tweet,
+      sourceTextContent: "English title",
+      status: "active",
+      walkId: "walk-id",
+      wrapper,
+      wrapperTextContent: wrapper.textContent,
+    }
+    registerBilingualTranslationState(state)
+    await flushDomUpdates()
+    mockWalkAndLabelElement.mockClear()
+    mockTranslateNodesBilingualMode.mockClear()
+
+    // Node identity churn with identical text (React re-render writing the
+    // same content) must stay classified as self-inflicted noise.
+    wrapper.replaceChildren(document.createTextNode("中文译文"))
+    await flushDomUpdates()
+
+    expect(mockWalkAndLabelElement).not.toHaveBeenCalled()
+    expect(mockTranslateNodesBilingualMode).not.toHaveBeenCalled()
+
+    unregisterBilingualTranslationState(state)
+    manager.stop()
+  })
+
+  it("caps tamper-driven retranslation passes behind the budget (#1918)", async () => {
+    vi.useFakeTimers()
+    const flushWithFakeTimers = async (rounds = 4) => {
+      for (let i = 0; i < rounds; i++) {
+        await Promise.resolve()
+        await vi.advanceTimersByTimeAsync(0)
+        await Promise.resolve()
+      }
+    }
+
+    try {
+      document.body.innerHTML = `
+        <p id="tweet"><span id="source">English title</span></p>
+      `
+
+      const manager = new PageTranslationManager()
+      await manager.start()
+      await flushWithFakeTimers()
+
+      const tweet = document.getElementById("tweet") as HTMLElement
+      const wrapper = document.createElement("span")
+      wrapper.className = "notranslate read-frog-translated-content-wrapper"
+      wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+      wrapper.append("译文 0")
+      tweet.append(wrapper)
+      const translatedTextNode = wrapper.firstChild as Text
+      // Snapshot never matches the wrapper, so every in-wrapper rewrite marks
+      // the source stale — a site truncation script fighting our repairs.
+      const state: BilingualTranslationState = {
+        layoutSource: tweet,
+        sourceTextContent: "English title",
+        status: "active",
+        walkId: "walk-id",
+        wrapper,
+        wrapperTextContent: "expected 译文",
+      }
+      registerBilingualTranslationState(state)
+      await flushWithFakeTimers()
+      mockTranslateNodesBilingualMode.mockClear()
+
+      let churn = 0
+      mockTranslateNodesBilingualMode.mockImplementation(async () => {
+        churn += 1
+        translatedTextNode.data = `译文 ${churn}`
+        await flushWithFakeTimers(2)
+      })
+
+      translatedTextNode.data = "译文 start"
+      await flushWithFakeTimers(8)
+
+      // Same #1831 protections, new record class: per-invocation pass cap…
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(3)
+      expect((manager as any).pendingRetranslateRetries.size).toBe(1)
+
+      // …then the debounced retry burns the rest of the per-window budget.
+      await vi.advanceTimersByTimeAsync(1000)
+      await flushWithFakeTimers()
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(6)
+
+      manager.stop()
+      expect((manager as any).pendingRetranslateRetries.size).toBe(0)
+
+      unregisterBilingualTranslationState(state)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("caps retranslation passes and defers perpetual churn behind a debounced retry (#1831)", async () => {
+    vi.useFakeTimers()
+    const flushWithFakeTimers = async (rounds = 4) => {
+      for (let i = 0; i < rounds; i++) {
+        await Promise.resolve()
+        await vi.advanceTimersByTimeAsync(0)
+        await Promise.resolve()
+      }
+    }
+
+    try {
+      document.body.innerHTML = `
+        <p id="tweet"><span id="source">Ticker 0</span></p>
+      `
+
+      const manager = new PageTranslationManager()
+      await manager.start()
+      await flushWithFakeTimers()
+
+      const tweet = document.getElementById("tweet") as HTMLElement
+      const source = document.getElementById("source")!.firstChild as Text
+      const wrapper = document.createElement("span")
+      wrapper.className = "notranslate read-frog-translated-content-wrapper"
+      wrapper.setAttribute("data-read-frog-translation-mode", "bilingual")
+      tweet.append(wrapper)
+      // Snapshot never matches, so every mutation marks the source stale —
+      // the pathological ticker page.
+      const state: BilingualTranslationState = {
+        layoutSource: tweet,
+        sourceTextContent: "never matches",
+        status: "active",
+        walkId: "walk-id",
+        wrapper,
+        wrapperTextContent: null,
+      }
+      registerBilingualTranslationState(state)
+      await flushWithFakeTimers()
+      mockTranslateNodesBilingualMode.mockClear()
+
+      let churn = 0
+      mockTranslateNodesBilingualMode.mockImplementation(async () => {
+        churn += 1
+        source.data = `Ticker ${churn}`
+        // Let the observer deliver the mutation before this pass resolves so
+        // the do/while sees a bumped version every time.
+        await flushWithFakeTimers(2)
+      })
+
+      source.data = "Ticker start"
+      await flushWithFakeTimers(8)
+
+      // Per-invocation cap: exactly MAX_REFRESH_PASSES synchronous passes.
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(3)
+      expect((manager as any).pendingRetranslateRetries.size).toBe(1)
+
+      // Debounced retry fires and burns the rest of the per-window budget.
+      await vi.advanceTimersByTimeAsync(1000)
+      await flushWithFakeTimers()
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(6)
+
+      // Budget exhausted: the next retry is a no-op that re-arms itself.
+      await vi.advanceTimersByTimeAsync(1000)
+      await flushWithFakeTimers()
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(6)
+
+      // stop() cancels pending retries; nothing fires afterwards.
+      manager.stop()
+      expect((manager as any).pendingRetranslateRetries.size).toBe(0)
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(mockTranslateNodesBilingualMode).toHaveBeenCalledTimes(6)
+
+      unregisterBilingualTranslationState(state)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("unmounts the error-UI React root when the site removes an ancestor of our wrapper (#1831)", async () => {
+    document.body.innerHTML = `
+      <div id="comment"><p id="tweet"><span id="source">Original content</span></p></div>
+    `
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const comment = document.getElementById("comment") as HTMLElement
+    const tweet = document.getElementById("tweet") as HTMLElement
+    const wrapper = document.createElement("span")
+    wrapper.className = "notranslate read-frog-translated-content-wrapper"
+    const errorHost = document.createElement("div")
+    errorHost.className = "read-frog-react-shadow-host"
+    const cleanupSpy = vi.fn<() => void>()
+    ;(errorHost as any).__reactShadowContainerCleanup = cleanupSpy
+    wrapper.append(errorHost)
+    tweet.append(wrapper)
+    await flushDomUpdates()
+
+    // Site-driven removal of the whole comment subtree.
+    comment.remove()
+    await flushDomUpdates()
+
+    expect(cleanupSpy).toHaveBeenCalledTimes(1)
+
+    // Idempotent on a duplicate delivery of the same removal.
+    ;(manager as any).cleanupDetachedTranslationArtifacts([comment])
+    expect(cleanupSpy).toHaveBeenCalledTimes(1)
+
+    manager.stop()
+  })
+
+  it("does not accumulate mutation observers when a shadow-root element is re-added (#1831)", async () => {
+    const host = document.createElement("div")
+    host.id = "shadow-host"
+    const shadowRoot = host.attachShadow({ mode: "open" })
+    const shadowChild = document.createElement("div")
+    shadowChild.innerHTML = "<p>Shadow paragraph</p>"
+    shadowRoot.append(shadowChild)
+    document.body.append(host)
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observerCountAfterStart = (manager as any).mutationObservers.length
+    expect(observerCountAfterStart).toBeGreaterThan(0)
+
+    for (let i = 0; i < 5; i++) {
+      host.remove()
+      await flushDomUpdates()
+      document.body.append(host)
+      await flushDomUpdates()
+    }
+
+    expect((manager as any).mutationObservers.length).toBe(observerCountAfterStart)
+
+    manager.stop()
+  })
+
+  it("splits a pure-container giant into its descendant paragraphs (#1881)", async () => {
+    // docs.docker.com regression shape: one flat container labeled as a
+    // paragraph spanning the whole document, with real paragraphs nested
+    // inside. Built via DOM APIs — the HTML parser refuses nested <p>.
+    // The container owns NO direct text, which is what makes the split
+    // lossless — measured on the real page, its <article>'s own text is 0
+    // chars. (An earlier version of this fixture appended a direct text node,
+    // which the real page does not have and which the split would strand.)
+    const giant = document.createElement("p")
+    giant.id = "giant"
+    const inner1 = document.createElement("p")
+    inner1.id = "inner1"
+    inner1.textContent = "Nested paragraph one"
+    const inner2 = document.createElement("p")
+    inner2.id = "inner2"
+    inner2.textContent = "Nested paragraph two"
+    giant.append(inner1, inner2)
+
+    const unsplittable = document.createElement("p")
+    unsplittable.id = "unsplittable"
+    unsplittable.textContent = "One enormous paragraph without nested paragraphs"
+
+    document.body.append(giant, unsplittable)
+    // jsdom rects default to 0 — mark only the giants as taller than the
+    // split cap (3 viewports).
+    const tall = { height: 200_000 } as DOMRect
+    giant.getBoundingClientRect = () => tall
+    unsplittable.getBoundingClientRect = () => tall
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observer = intersectionObservers[0]
+    const observed = observer!.observe.mock.calls.map((call) => call[0])
+    // The giant is split: its nested paragraphs are observed individually.
+    expect(observed).toContain(inner1)
+    expect(observed).toContain(inner2)
+    expect(observed).not.toContain(giant)
+    // A giant with no nested paragraphs cannot be split — observed whole.
+    expect(observed).toContain(unsplittable)
+
+    manager.stop()
+  })
+
+  it("refuses to split a giant that owns prose beside block children", async () => {
+    // Blogger / paulgraham.com shape: the container's own bare text IS the
+    // article and the labeled descendants are incidental fragments. Splitting
+    // here observed only the fragments and stranded 92% of the post.
+    const flow = document.createElement("p")
+    flow.id = "flow"
+    const strayInner = document.createElement("p")
+    strayInner.id = "strayInner"
+    strayInner.textContent = "an incidental fragment"
+    flow.append("bare sentence one, which is the actual article", strayInner)
+    flow.append("bare sentence two, also the actual article")
+    document.body.append(flow)
+    flow.getBoundingClientRect = () => ({ height: 200_000 }) as DOMRect
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observed = intersectionObservers[0]!.observe.mock.calls.map((call) => call[0])
+    // Observed whole, so the translate path re-segments it into runs and the
+    // bare sentences are translated instead of dropped.
+    expect(observed).toContain(flow)
+    expect(observed).not.toContain(strayInner)
+
+    manager.stop()
+  })
+
+  it("still splits a giant that owns prose but has no block child", async () => {
+    // Without a block-labeled child the translate path takes its single-node
+    // branch, so observing whole would ship the entire container as ONE
+    // request. Lossy-but-gated beats one doomed payload.
+    const flow = document.createElement("p")
+    flow.id = "flow"
+    const inlinePara = document.createElement("span")
+    inlinePara.id = "inlinePara"
+    inlinePara.textContent = "an inline fragment"
+    inlinePara.setAttribute("data-read-frog-paragraph", "")
+    inlinePara.setAttribute("data-read-frog-inline-node", "")
+    flow.append("bare sentence one", inlinePara, "bare sentence two")
+    document.body.append(flow)
+    flow.getBoundingClientRect = () => ({ height: 200_000 }) as DOMRect
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observed = intersectionObservers[0]!.observe.mock.calls.map((call) => call[0])
+    expect(observed).toContain(inlinePara)
+    expect(observed).not.toContain(flow)
+
+    manager.stop()
+  })
+
+  it("still splits a giant whose split already yields many units", async () => {
+    // Safety valve: above the unit cap, keeping viewport gating beats
+    // rescuing the container's own text — refusing would enqueue the whole
+    // page at once, which is #1881 verbatim.
+    const giant = document.createElement("p")
+    giant.id = "giant"
+    giant.append("a stray sentence the split will strand")
+    const inners: HTMLElement[] = []
+    for (let i = 0; i < GIANT_SPLIT_STRANDED_TEXT_MAX_UNITS + 1; i++) {
+      const inner = document.createElement("p")
+      inner.textContent = `Nested paragraph ${i}`
+      inners.push(inner)
+      giant.append(inner)
+    }
+    document.body.append(giant)
+    giant.getBoundingClientRect = () => ({ height: 200_000 }) as DOMRect
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observed = intersectionObservers[0]!.observe.mock.calls.map((call) => call[0])
+    expect(observed).not.toContain(giant)
+    expect(observed).toContain(inners[0])
+
+    manager.stop()
+  })
+
+  it("never refuses to split <body>", async () => {
+    // <body> is force-block and picks up a paragraph label from any stray
+    // direct text node. Refusing there would collapse the whole document into
+    // one observed unit. The mock walk only labels <p>, so label body the way
+    // the real walker would.
+    const real = document.createElement("p")
+    real.id = "real"
+    real.textContent = "Real paragraph"
+    document.body.append("Loading…", real)
+    document.body.setAttribute("data-read-frog-paragraph", "")
+    document.body.getBoundingClientRect = () => ({ height: 200_000 }) as DOMRect
+
+    const manager = new PageTranslationManager()
+    await manager.start()
+    await flushDomUpdates()
+
+    const observed = intersectionObservers[0]!.observe.mock.calls.map((call) => call[0])
+    expect(observed).not.toContain(document.body)
+    expect(observed).toContain(real)
+
+    manager.stop()
+    document.body.removeAttribute("data-read-frog-paragraph")
+  })
+})

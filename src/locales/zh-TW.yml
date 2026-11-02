@@ -1,12 +1,15 @@
 name: 陪讀蛙
-extName: 陪讀蛙 - 翻譯與學習
-extDescription: 陪讀蛙是一款開放原始碼的瀏覽器擴充功能，能協助使用者在任何網站上深入學習語言。
+extName: "陪讀蛙 - AI 雙語翻譯、影片字幕與背單字"
+extDescription: "用 AI 雙語對照翻譯網頁，以及 YouTube、Netflix、X 的影片字幕。遇到生字一鍵儲存，用閃卡複習。"
 uninstallSurveyUrl: https://tally.so/r/3E9XDL
 account:
   login: 登入
   webApp: 網頁應用程式
   logout: 退出登入
   logoutError: 退出登入失敗，請重試
+  grantAccess: 授予存取權限
+  grantAccessHint: 需要存取 readfrog.app
+  grantAccessError: 授予存取權限失敗，請重試
 dataTypes:
   string: 文字
   number: 數字
@@ -54,6 +57,11 @@ popup:
     notification: 陪讀蛙更新動態
   aiSmartContext: AI 智慧上下文
   aiSmartContextDescription: 結合網頁前後文提升翻譯品質。需要設定 LLM 翻譯服務提供者。
+  storeReview:
+    title: 用得還順手嗎？
+    description: 到商店留個評價，能幫助更多人發現陪讀蛙。
+    action: 去評價
+    dismiss: 關閉
   more:
     title: 更多
     help: 說明
@@ -103,9 +111,11 @@ options:
     toggle: 切換側邊欄
     settings: 設定
     features: 功能
+    translation: 翻譯
     product: 產品
   tools:
     translationHub: 翻譯中心
+    pdfTranslation: PDF 翻譯
   product:
     roadmap: 產品路線圖
   helpAndCommunity:
@@ -148,6 +158,8 @@ options:
       resetsAt: "$1 重置"
       daily: 每日額度
       weekly: 每週額度
+      oneTime: 贈送額度
+      expiresAt: "$1 到期"
       features:
         pageTranslation: 網頁翻譯
         customAction: 自訂 AI 指令
@@ -157,13 +169,13 @@ options:
         inputTranslation: 輸入翻譯
         languageDetection: 語言偵測
     sponsorCta: 取得高速高性價比 AI
-    sponsorCtaJalapenoCloud: 取得 GLM 5.2 五折優惠
+    sponsorCtaJalapenoCloud: 取得 GLM 5.3 五折優惠
     setApiKeyWarning:
       message: 請在 $1 頁面設定 API 金鑰
     badges:
       featureCount: $1 個功能
       sponsor: 贊助
-      sponsorJalapenoCloud: $$2 免費額度
+      sponsorJalapenoCloud: $$1 免費額度
     dialog:
       title: 新增提供者
       groups:
@@ -243,7 +255,7 @@ options:
         customChatComplete: 自訂 Chat Complete
         customResponses: 自訂 Responses
       attribution:
-        builtInAi: 由 Read Frog 託管的普通模型。非 Ultra 使用者僅支援在自訂 AI 指令使用，Ultra 使用者支援在更多功能上使用。
+        builtInAi: 由 Read Frog 託管的普通模型。Pro 和 Ultra 使用者可在全部功能上使用，消耗每週額度；免費使用者僅支援在自訂 AI 指令使用。
         builtInAiAdvance: 由 Read Frog 託管的進階模型，Ultra 會員專屬。網頁翻譯、自訂 AI 指令等全部內建 AI 功能均可使用，共享每週額度，額度消耗比標準模型更快。
       description:
         openai: 提供 GPT-4o 等模型
@@ -272,7 +284,6 @@ options:
         cerebras: 超快速 AI 推理，適合快速翻譯和文字分析
         replicate: 存取多樣化開源模型，適合專業翻譯任務
         perplexity: 即時知識增強 AI，提供依脈絡翻譯和閱讀輔助
-        vercel: 針對網頁內容翻譯和分析最佳化的 AI 模型
         volcengine: 字節跳動旗下雲端 AI 平台，提供適合翻譯與閱讀的豆包系列大型語言模型
         minimax: MiniMax AI 平台，提供適合文字產生的先進 MiniMax-M2 系列大型語言模型
         alibaba: 阿里雲通義千問系列模型，具備先進的推理和多語言能力
@@ -291,6 +302,7 @@ options:
     featureProviders:
       title: 功能提供者
       description: 為每個功能選擇使用的提供者
+      chooseProvider: 選擇提供者
       features:
         pageTranslation: 網頁翻譯
         selectionTranslation: 選取文字翻譯
@@ -299,7 +311,7 @@ options:
         noteSuggestion: 猜你想存
       descriptions:
         pageTranslation: 翻譯整個網頁，雙語對照或直接取代原文。
-        selectionTranslation: 透過劃詞工具列翻譯你選取的文字。
+        selectionTranslation: "翻譯你選取的文字；劃詞標註的釋義也由它產生。"
         inputTranslation: 在送出前翻譯你寫在輸入框裡的內容。
         videoSubtitles: 翻譯影片播放器中隨播放出現的字幕。
         noteSuggestion: 選取文字翻譯後，推薦值得存入筆記庫的詞條。
@@ -325,6 +337,8 @@ options:
       llmProviderNotConfigured: 沒有為 $1 選擇 LLM 提供者
   patterns:
     duplicate: 該模式已在列表中
+    gluedWildcard: '"*" 必須代表位址中完整的一段，例如 *.example.com 或 example.*'
+    unsupported: 無法比對這個位址。不支援連接埠，也不支援 http 與 https 以外的協定。
   preference:
     title: 偏好設定
     pageDescription: 設定陪讀蛙的外觀與生效範圍，以及設定檔的同步與備份方式。
@@ -365,16 +379,17 @@ options:
       title: 設定
       googleDrive:
         title: Google Drive 雲端同步
-        description: 遠端設定較新時下載，本機設定較新時上傳
+        description: 遠端設定較新時下載，本機設定較新時上傳；術語庫走單獨一個檔案，逐條合併而不是整份覆蓋。
         sync: 同步到 Google Drive
         syncing: 同步中…
         syncSuccess:
           uploaded: 本機設定已上傳至雲端
           downloaded: 已套用遠端設定
-          sameChanges: 本機和遠端修改一致，已同步
-          noChange: 已是最新狀態
-          unresolved: 衝突已解決並同步至本機和雲端
-        syncError: 同步失敗，請重試
+          sameChanges: 兩端設定變更相同，已同步
+          noChange: 設定已是最新狀態
+          unresolved: 設定衝突已解決並同步
+        syncError: 設定同步失敗，請重試
+        accountChangedError: 對話框開啟期間登入的 Google 帳號發生變化，未上傳任何內容，請重新同步。
         metadataCorrupted: 同步資料損壞，已自動套用遠端設定
         lastSyncTime: 最後同步時間
         logout: 登出帳號
@@ -410,14 +425,50 @@ options:
             title: 合併後的設定存在驗證錯誤
             description: 請調整下方差異以修復：
           moreErrors: …還有 $1 個錯誤
+        glossary:
+          thisDevice: 本機
+          cloud: 雲端
+          deleted: 已刪除
+          disabled: 已停用
+          upToDate: 術語庫已是最新
+          uploaded: 術語庫已上傳到雲端
+          merged: "詞彙庫已同步：新增 $1，更新 $2，刪除 $3"
+          undo: 復原
+          undone: 術語庫已還原成同步前的樣子
+          undoUnavailable: 該復原已失效 — 之後詞彙庫已發生變化。
+          retry: 同步期間術語庫有變動，請再執行一次。
+          accountChangedRetry: 對話框開啟期間登入的 Google 帳號發生變化，未上傳任何內容，請重新同步。
+          busy: 另一個分頁正在同步你的術語庫。
+          malformed: 雲端的術語庫檔案無法讀取，本次未做任何變更。
+          versionTooNew: 該術語庫檔案由較新版本的 Read Frog 寫入，請先更新擴充功能。
+          duplicateFiles: 你的雲端有多個術語庫檔案，本次未做任何變更，請先刪除多餘的那個。
+          capExceeded: "合併後會超出術語庫上限 $1 筆，本次未做任何變更。"
+          failed: 術語庫同步失敗
+          review:
+            title: 確認這次術語庫同步
+            description: 兩邊不一致的地方，請選擇要保留哪一個。
+            firstSync: "本機首次同步：從雲端接收 $1 筆，上傳 $2 筆。"
+            accountChanged: "目前登入的是 $1，和這台裝置上次同步的帳號不是同一個。本機的 $2 筆術語庫資料會被上傳到這個帳號。如果只想要這個帳號的術語庫，請取消、先把本機的刪掉，再同步一次。"
+            destructive: "這次同步會刪除本機 $2 筆術語庫資料中的 $1 筆。"
+            moreConflicts: "另有 $1 處差異未列出，均按合併結果處理。"
+            confirm: 同步
+            cancel: 取消
       manualSync:
         title: 手動設定同步
-        description: 手動匯入與匯出設定
+        description: 手動匯入匯出你的設定，術語庫也一併帶走
         import: 匯入
         export: 匯出
         importSuccess: 設定匯入成功
         exportSuccess: 設定匯出成功
+        exportGlossaryFailed: 設定已匯出，但詞彙庫無法讀取，未包含在檔案中。
         importError: 匯入失敗
+        glossaryImported: "已匯入 $1 筆術語，取代了原有的術語庫。"
+        glossaryUndo: 復原
+        glossaryUndone: 術語庫已還原成匯入前的樣子
+        glossaryUndoUnavailable: 該復原已失效 — 之後詞彙庫已發生變化。
+        glossaryMalformed: 那個檔案裡的術語庫無法讀取，本次未做任何變更。
+        glossaryVersionTooNew: 那個檔案裡的術語庫由較新版本的 Read Frog 寫入，請先更新擴充功能。
+        glossaryCapExceeded: "那個檔案的術語庫資料比上限 $2 筆多出 $1 筆，本次未做任何變更。"
         exportOptions:
           title: 選擇匯出選項
           description: 請選擇是否在匯出的設定中包含 API 金鑰。包含 API 金鑰可能會洩露敏感資訊，建議僅在安全環境下使用。
@@ -456,13 +507,13 @@ options:
           confirm: 刪除
       reset:
         title: 重設設定
-        description: 重設所有設定為預設值
+        description: 將所有設定重設為預設，詞彙庫不受影響
         dialog:
           title: 重設設定
           trigger: 重設設定
           confirm: 確認
           cancel: 取消
-          description: 此操作會清空所有自訂設定，並將其重設為預設值，請確認是否清除。
+          description: 此操作將清空您所有的自訂設定，並重設為預設值。詞彙庫會保留 — 如需刪除請至詞彙庫頁面操作。請確認。
     userExperience:
       title: 使用體驗
       beta:
@@ -474,7 +525,7 @@ options:
         description: 透過協助我們定位 bug、最佳化介面配置等改善陪讀蛙
   shortcuts:
     title: 快速鍵
-    pageDescription: 設定閱讀時觸發翻譯的按鍵。
+    pageDescription: 設定閱讀時觸發翻譯、朗讀和 AI 指令的按鍵。
     setShortcut: 設定快速鍵
     pageTranslation:
       title: 網頁翻譯
@@ -489,11 +540,25 @@ options:
       title: 字幕翻譯
       description: 開啟或關閉影片的翻譯字幕。
     nodeTranslation:
-      title: 段落翻譯
+      title: 滑鼠停留翻譯
       description: 滑鼠停留或長按段落，只翻譯這一段。
+      customDescription: 滑鼠停留在段落上時按下這組按鍵，即可翻譯這一段。
     translationHub:
       title: 翻譯中心
       description: 在新分頁中開啟翻譯中心。
+    selectionSpeak:
+      title: "選取文字朗讀"
+      description: "朗讀選取的文字，再按一次停止。"
+    selectionAnnotation:
+      title: "劃詞標註"
+      description: "為選取的文字加上底線，並在行間顯示釋義。"
+    actions:
+      title: "AI 指令"
+      description: "對選取的文字執行 AI 指令。自訂指令預設沒有快速鍵，在這裡設定即可。"
+    turnedOff: "此功能已關閉，重新開啟前快速鍵不會生效。"
+    turnOn: "去開啟"
+    clash: "與「$1」的快速鍵相同，請修改其中一個。"
+    taken: "$1 已被「$2」使用。"
   overlayTools:
     title: 懸浮工具
   inputTranslation:
@@ -559,6 +624,14 @@ options:
     enable:
       title: 啟用選取工具列
       description: 在網頁上選取文字時顯示工具列，快速翻譯、朗讀和使用 AI 指令
+    annotation:
+      title: "劃詞標註"
+      enable:
+        title: "啟用"
+        description: "為選取的詞或短語加上底線，並在行間寫出釋義"
+      provider:
+        title: "提供者"
+        description: "產生釋義；與「翻譯」共用同一個設定"
     actions:
       title: 操作
       translate:
@@ -568,12 +641,12 @@ options:
         title: 朗讀
         description: 在工具列中顯示朗讀按鈕，用於朗讀選取的文字
       noteSuggestion:
-        title: 儲存建議
+        title: 猜你想存
         description: 使用 AI 供應商進行劃詞翻譯後，推薦可存入筆記庫的詞條
         action: 指令
-        actionDescription: 用於產生儲存建議的指令
+        actionDescription: 用於產生「猜你想存」的指令
         provider: 提供者
-        providerDescription: 用於產生儲存建議的 AI 提供者
+        providerDescription: 用於產生「猜你想存」的 AI 提供者
     display:
       title: 顯示
       opacity:
@@ -596,18 +669,38 @@ options:
       providerUnavailable: 所選提供者無法使用
     customActions:
       title: 自訂 AI 指令
-      pageDescription: 撰寫自己的提示詞，從劃詞工具列對選取的文字執行。
+      pageDescription: 撰寫自己的提示詞，從劃詞工具列對選取的文字執行。指令產生結果的資料、樣式和互動都可以自訂。
       description: 為選取文字新增自訂的結構化 AI 指令
       configTitle: 指令設定
+      introVideo:
+        trigger: "觀看影片"
+        title: "30 秒了解自訂 AI 指令"
       builtIn: 內建
+      badges:
+        new: 新增
+        updated: 已更新
+        createdFrom: 建立於 $1
+        updatedFrom: 更新於 $1
       add: 新增 AI 指令
       edit: 編輯 AI 指令
       empty: 目前沒有自訂 AI 指令
       noEnabledLlmProvider: 請先啟用至少一個 LLM 提供者後再建立自訂 AI 指令
+      tabs:
+        config: 設定
+        notebase: 筆記庫
+        hasErrors: 有錯誤
+        connected: 已連線
+        needsAttention: 需要處理
       form:
         name: 名稱
         customize: 自訂
         customizeTooltip: 內建指令不允許修改提示詞，點此按鈕來修改指令提示詞
+        aiConfigHelper:
+          trigger: "讓 AI 幫我設定"
+          title: "讓 AI 幫我設定"
+          description: "複製下方的提示詞，貼給你常用的 AI 助理（ChatGPT、Claude、DeepSeek、Kimi 等）。它會先問你想做什麼，再告訴你每一項怎麼填。提示詞包含這個動作目前的設定，但不含 API 金鑰。"
+          copy: "複製提示詞"
+          copyFailed: "複製失敗，請再試一次"
         icon: 圖示
         iconField:
           chooseAriaLabel: 選擇圖示
@@ -629,12 +722,13 @@ options:
         fieldType: 欄位類型
         fieldDescription: 描述
         fieldDescriptionPlaceholder: 描述此欄位應包含的內容…
-        fieldSpeaking: 啟用朗讀
         actions: 操作
         cancel: 取消
         save: 儲存
         defaultFieldName: 結果
         fieldNamePlaceholder: 欄位名稱
+        selectionField: "選取的文字"
+        selectionFieldDescription: "你選取的原文，原樣儲存，不由 AI 產生。"
         autoFieldPrefix: 欄位
         addFieldDialog:
           title: 新增輸出欄位
@@ -646,6 +740,69 @@ options:
           description: 此輸出欄位將被移除。
           confirm: 刪除
           cancel: 取消
+        layout:
+          title: 版面
+          description: 結果在彈出視窗中的顯示方式。使用 HTML + Liquid，欄位會隨回答串流填入。
+          reset: 還原預設
+          resetFieldList: 欄位清單
+          resetDictionary: 字典卡片
+          resetSentenceAnalysis: 句子分析卡片
+          resetImproveWriting: "改善寫作卡片"
+          resetConfirmTitle: 取代目前的版面？
+          resetConfirmDescription: 編輯器中的內容將被取代，之後仍可在編輯器中復原。
+          resetConfirm: 取代
+          edit: 編輯
+          preview: 預覽
+          width: 寬度
+          themeLight: 淺色
+          themeDark: 深色
+          replay: 重播
+          sampleData: 範例資料
+          sampleDataHint: 僅用於此預覽，不會儲存。
+          sampleDataSavedHint: 僅用於此預覽，隨此指令一起儲存。
+          sampleDataReset: 重設範例
+          sampleSelection: 選取的文字
+          sampleTargetLanguage: 目標語言
+          insertField: 欄位
+          insertSpeak: 朗讀按鈕
+          insertCondition: 有值時顯示
+          insertContext: 上下文
+          insertLoop: 所有欄位
+          syntaxHelp: 語法
+          builtInHint: 內建指令的版面無法編輯。點選「自訂」複製一份後再修改。
+          viewSource: 檢視原始碼
+          emptyNotice: 版面為空，彈出視窗將顯示預設的欄位清單。
+          fallbackBanner: 此版面無法顯示，已改用預設版面。$1
+          sanitized: 基於安全考量已移除：$1
+          unusedFields: 未在版面中顯示：
+          tooLong: 版面最多 $1 個字元。
+          renameSkipped: 版面中仍參照「$1」，請手動修改。
+          reservedName: 「ctx」和「forloop」是版面保留名稱，請換一個名稱。
+          help:
+            output: 顯示欄位的值，值中的 HTML 會被跳脫。
+            condition: 僅當欄位有值時顯示其中的內容。
+            loop: 依序對每個欄位重複一次，可使用 f.name、f.value 和 f.type。
+            speak: 帶有 data-speak 的任何元素會在回答完成後朗讀該值（值為空時朗讀元素本身的文字）。
+            speakLang: data-speak-lang 指定朗讀語言（如 es、en-US），會用該語言的聲音朗讀；未指定時自動辨識語言，單一詞語常常辨識不準。
+            speakAutoplay: 帶有 data-speak-autoplay 的元素會在回答完成後自動朗讀，只有第一個這樣的元素會播放。
+            status: 依狀態設定樣式，宿主的 data-status 為 streaming、done 或 error。
+            filters: newline_to_br 保留換行（需放在最後）；lines 將文字拆成逐行的清單。
+            styles: <style> 中的 CSS 只作用於此結果。--rf-* 色彩會跟隨淺色和深色主題。
+          lint:
+            parseError: Liquid 語法錯誤：$1
+            unknownField: 沒有名為「$1」的欄位。
+            unknownContextKey: ctx 中沒有「$1」。可用：$2。
+            fieldShadowedByLocal: 版面中對「$1」賦值，會遮住同名欄位。
+            liquidInStyle: <style> 中不會執行 Liquid，這裡會照原文保留。
+            styleInConditional: <style> 區塊一律生效，即使放在「$1」標籤中。
+            cssImport: "@import 會被移除，版面無法載入外部樣式。"
+            cssFontFace: "@font-face 會被移除，請使用裝置上已有的字型。"
+            unquotedAttributeOutput: 請為這個屬性值加上引號，否則值可能突破屬性範圍。
+            filterIgnored: 「$1」標籤中的篩選器會被忽略，請先將篩選後的值指派給變數。
+            newlineToBrNotLast: newline_to_br 只有作為輸出的最後一個篩選器才有效。
+            tooLong: 版面超過 $1 個字元，無法儲存。
+            fieldNotShown: 「$1」未在此版面中顯示。
+            reservedFieldName: 欄位名稱「$1」是版面保留名稱，請重新命名該欄位。
         notebase:
           title: 筆記庫連線
           description: 將這個指令的結構化結果儲存到遠端筆記庫。
@@ -677,16 +834,16 @@ options:
           schemaErrorDescription: 請稍後再試一次重新整理。
           schemaLoading: 正在載入筆記庫 schema…
           mappingsLabel: 欄位對應
-          mappingsEmpty: 尚未建立對應，準備好後即可新增。
-          addMappingAction: 新增對應
-          removeMappingAction: 移除對應
           localFieldLabel: 指令欄位
-          localFieldPlaceholder: 選擇一個指令欄位
           remoteFieldLabel: 筆記庫欄位
-          remoteFieldPlaceholder: 選擇一個筆記庫欄位
           columnUnavailableOption: 已刪除
           invalidMappingsTitle: 有些對應需要處理
           invalidMappingsDescription: 無效對應會被保留。儲存到筆記庫前請先修復它們。
+          noFieldSavedTitle: "沒有欄位會存進這個筆記庫"
+          noFieldSavedDescription: "至少為一個欄位選擇筆記庫欄位，才能儲存筆記。"
+          mappingSummary: "存 $1 · 不存 $2 · 待定 $3"
+          skipFieldOption: "不儲存"
+          undecidedFieldPlaceholder: "選擇筆記庫欄位或不儲存"
           mappingMissingLocal: 對應的指令欄位已不存在。
           mappingMissingRemote: 對應的筆記庫欄位已不存在。
           mappingMissingSchema: 重新整理筆記庫 schema 後才能驗證這個對應。
@@ -696,6 +853,7 @@ options:
           paragraphs: 與選取範圍相交的段落內容，會以空行串接，傳給自訂 AI 指令時會截斷到前 2000 個字元
           targetLanguage: 使用者的目標語言
           webTitle: 網頁標題
+          webUrl: 目前網頁的完整 URL
           webContent: 從目前頁面擷取的網頁內文（截斷到前 2000 個字元）
         delete: 刪除
         deleteDialog:
@@ -726,6 +884,15 @@ options:
             8. 難度必須是 CEFR 等級（A1、A2、B1、B2、C1 或 C2）。
             9. 如果某個欄位無法判斷，請回傳空字串，不要猜測。
             10. 除非必須使用來源形式才能保持清楚，所有文字欄位都請使用 {{targetLanguage}} 回答。
+            11. 「句中詞形」欄位標出所選字詞在「句子」中的位置：它是一個字串，內容是精簡的 JSON 陣列，每項為 {"text": ...}，逐字引用「句子」中的原文，例如 [{"text":"blossoms"}]。如果「句子」把字詞拆成了幾個部分（例如德文 "anrufen" 在 "Er ruft seine Mutter an" 中），請依序每個部分一項：[{"text":"ruft"},{"text":"an"}]。請正確跳脫內部的引號。
+            12. 「記憶技巧」欄位請像一位好老師那樣，針對這個詞條本身的特點，教學習者記住它（講的是所選字詞本身，不是它的翻譯）。最多給 3 條，每條一行，最有幫助的放在最前面。只寫真正有用的技巧，寧缺勿濫；如果沒有真正有用的，就回傳空字串，不要硬湊。每行只講一種技巧，以技巧名稱和冒號開頭，技巧名稱和內容都使用 {{targetLanguage}}。先從字詞的構成著手，再補充其他真正有用的：
+               - 字根字首：字詞的組成部分（字根、字首、字尾，或複合字裡的各個字），以及它們如何組合出字義。
+               - 拆字：以漢字書寫的詞（中文、日文漢字詞、源自漢字的韓文詞），每個字的意思，或一個字的部件。
+               - 字源：字詞的來源，或學習者可能認識的相關字詞（同源字、外來語、其他語言中寫法相同的漢字詞）。
+               - 近義詞／反義詞：一個近義詞及兩者的差別，或一個反義詞。
+               - 易混淆字：外形或讀音相近的字詞，以及如何分辨。
+               - 搭配：它常用的固定搭配，值得整組記住。
+               不適用的技巧直接略過，不要寫一行說明它不適用。每條都要說出「定義」沒說到的東西：不要換句話重複字義、複述「句子」，或解釋字詞的屈折變化。只寫你確定的事實：不要編造字源、字根或漢字部件。有爭議或屬於民間傳說的字源故事不要寫，即使說成「只當趣味記」也不行（sincere 並非來自「無蠟」，posh 也不是首字母縮寫）。只有當各部分或各個字確實組成字義時才拆開講；「猶豫」「葡萄」這類不能按字拆開理解的詞，請改用其他技巧。不要用任何語言的諧音，也不要把一個字詞拆成不相干的字詞來記。
 
             ## 範例
 
@@ -737,8 +904,12 @@ options:
             - 音標：/ˈblɒs.əm/
             - 詞性：noun
             - 句子：The ephemeral beauty of cherry blossoms reminds us to cherish each moment.
+            - 句中詞形：[{"text":"blossoms"}]
             - 定義：花；花朵（尤指果樹的花）
             - 句子翻譯：櫻花短暫的美麗提醒我們珍惜每一刻。
+            - 記憶技巧：
+              字源：和 bloom（開花）同源，bl- 開頭的 bloom、blossom 都和開花有關
+              近義詞：bloom 多指花開的狀態，blossom 常指果樹（櫻桃、蘋果）的花
             - 難度：B2
 
             ### 範例 2
@@ -749,8 +920,12 @@ options:
             - 音標：kandou
             - 詞性：noun
             - 句子：この映画はつまらないと思ったけど、最後は感動した。
+            - 句中詞形：[{"text":"感動"}]
             - 定義：Being deeply moved; emotional touch
             - 句子翻譯：I thought this movie was boring, but the ending was moving.
+            - 記憶技巧：
+              Characters: 感 (feel) + 動 (move): your feelings are moved.
+              Collocation: 感動する = to be moved; 感動的 = moving, touching.
             - 難度：B1
           prompt: |-
             ## 輸入
@@ -765,59 +940,119 @@ options:
           fieldPartOfSpeechDescription: 文法類別（例如 noun、verb、adjective）。
           fieldSentence: 句子
           fieldSentenceDescription: 提取上方段落中包含所選字詞的完整句子，不要包含前後句。
+          fieldSentenceTerm: 句中詞形
+          fieldSentenceTermDescription: '所選字詞在「句子」中的位置：序列化為字串的 JSON 陣列，字詞的每個部分一項 {"text": 字串}，逐字引用「句子」原文（例如 [{"text":"blossoms"}]）。'
           fieldDefinition: 定義
           fieldDefinitionDescription: 針對脈絡語意提供一則精簡定義。
           fieldSentenceTranslation: 句子翻譯
           fieldSentenceTranslationDescription: 只翻譯提取出的句子。
+          fieldMemoryTips: "記憶技巧"
+          fieldMemoryTipsDescription: "幫助記住詞條的方法：最多 3 條，每條一行，以技巧名稱和冒號開頭（例如 字根字首：…）；沒有真正有用的就回傳空字串。"
           fieldDifficulty: 難度
           fieldDifficultyDescription: 預估 CEFR 難度等級 A1、A2、B1、B2、C1 或 C2。
+        sentenceAnalysis:
+          name: "長難句分析"
+          description: "像老師一樣批註長難句：主幹、子句和難點一目了然"
+          fieldSentence: "原句"
+          fieldAnnotations: "標註"
+          fieldTranslation: "譯文"
+          roles:
+            subject: "主詞"
+            predicate: "述語"
+            object: "受詞"
+            complement: "補語"
+            attributive: "修飾語"
+            adverbial: "狀語"
+            appositive: "同位語"
+            connector: "連接詞"
+          clauses:
+            subject: "主詞子句"
+            object: "受詞子句"
+            complement: "補語子句"
+            attributive: "形容詞子句"
+            adverbial: "副詞子句"
+            appositive: "同位語子句"
+            clause: "子句"
+          adverbialClauses:
+            time: "時間子句"
+            place: "地點子句"
+            cause: "原因子句"
+            condition: "條件子句"
+            concession: "讓步子句"
+            purpose: "目的子句"
+            result: "結果子句"
+            manner: "方式子句"
+            comparison: "比較子句"
+          forms:
+            infinitive: "不定詞"
+            gerund: "動名詞"
+            presentParticiple: "現在分詞"
+            pastParticiple: "過去分詞"
+          senses:
+            time: "時間"
+            place: "地點"
+            cause: "原因"
+            condition: "條件"
+            concession: "讓步"
+            purpose: "目的"
+            result: "結果"
+            manner: "方式"
+            comparison: "比較"
+          obstacles:
+            inversion: "倒裝"
+            fronting: "前置"
+            ellipsis: "省略"
+            passive: "被動"
+            subjunctive: "假設"
+            parenthesis: "插入"
+            dummyIt: "虛主詞"
+            postponedSubject: "真主詞"
+            cleft: "強調句"
+            comparison: "比較"
+            negation: "否定"
+            split: "拆分"
+            idiom: "慣用語"
+          restoreLabel: "還原："
+          hardLabel: "難點"
+          trunkLabel: "只看主幹"
+          slashesLabel: "斷句"
         improveWriting:
-          name: 改善寫作
-          description: 分析寫作錯誤並提出改善建議
-          systemPrompt: |-
-            你是協助語言學習者的寫作助理。
-
-            ## 目標
-            根據選取文字及其周圍段落，分析寫作問題並產生改寫版本。
-
-            ## 語言規則（重要）
-            1. 偵測 Selection 的原文語言，記為 {{originLanguage}}。
-            2. 「錯誤分析」欄位必須使用 {{targetLanguage}}。
-            3. 「改寫版本」欄位必須保持 {{originLanguage}}。
-            4. 絕對不要將「改寫版本」翻譯成 {{targetLanguage}}，除非 {{originLanguage}} 本來就是 {{targetLanguage}}。
-
-            ## 寫作規則
-            1. 找出文法、拼字、標點和用字錯誤。
-            2. 修改要自然，並保留作者原意與語氣。
-            3. 如果沒有明顯錯誤，請在「錯誤分析」中明確說明，並回傳輕度潤飾後的「改寫版本」。
-            4. 「改寫版本」應簡潔且可直接使用。
-
-            ## 範例
-            範例 A：
-            - Selection: He go to school yesterday, and he don't finish his homework.
-            - 偵測到 {{originLanguage}}：English
-            - {{targetLanguage}}：Chinese
-            - 錯誤分析（中文 — {{targetLanguage}}）：有主詞動詞一致與時態錯誤：go 應改為 went，don't 應改為 didn't，finish 應配合過去時態語境。
-            - 改寫版本（英文 — {{originLanguage}}）：He went to school yesterday, and he didn't finish his homework.
-
-            範例 B：
-            - Selection: 昨日私は友達に会いて、一緒に映画を見るました。
-            - 偵測到 {{originLanguage}}：Japanese
-            - {{targetLanguage}}：English
-            - 錯誤分析（English — {{targetLanguage}}）：There are verb conjugation errors: 会いて should be 会って (te-form of 会う), and 見るました should be 見ました (past tense of 見る in masu-form).
-            - 改寫版本（日文 — {{originLanguage}}）：昨日私は友達に会って、一緒に映画を見ました。
+          name: "改善寫作"
+          description: "像老師一樣批改：標出錯誤和不道地的表達，依場合給出修改後的版本"
+          fieldOriginal: "原文"
+          fieldSetting: "場合"
+          fieldAnnotations: "標註"
+          fieldImproved: "修改後"
+          fieldSummary: "總評"
+          types:
+            spelling: "拼寫"
+            grammar: "文法"
+            punctuation: "標點"
+            wordChoice: "用詞"
+            logic: "邏輯"
+            unnatural: "不道地"
+            register: "得體"
+            clarity: "清晰"
+            good: "亮點"
+          tiers:
+            error: "錯誤"
+            awkward: "欠妥"
+            good: "亮點"
+          hideFixesLabel: "藏答案"
+          hiddenHintLabel: "先自己想想怎麼改，再看答案。"
+          showImprovedLabel: "顯示修改後版本"
+          improvedLabel: "修改後"
+          copyLabel: "複製"
+          unchangedLabel: "與原文相同，無需修改"
+          removeLabel: "刪掉"
+        blank:
+          name: 空白
+          description: 從空白指令開始建立
           prompt: |-
             ## 輸入
             選取文字：{{selection}}
             段落：{{paragraphs}}
             目標語言：{{targetLanguage}}
-          fieldErrorAnalysis: 錯誤分析
-          fieldErrorAnalysisDescription: 使用 {{targetLanguage}} 說明選取文字中的文法、拼字、標點和用字問題。
-          fieldImprovedVersion: 改寫版本
-          fieldImprovedVersionDescription: 以原文語言修正並改善選取文字後的版本。
-        blank:
-          name: 空白
-          description: 從空白指令開始建立
       errors:
         nameRequired: 名稱不能為空
         duplicateName: 重複的指令名稱「$1」
@@ -826,6 +1061,115 @@ options:
         outputSchemaRequired: 至少需要一個輸出欄位
         fieldKeyRequired: 欄位名稱不能為空
         duplicateFieldKey: 欄位名稱不能重複
+  advanced:
+    title: 進階
+    pageDescription: 不屬於日常路徑的強大設定。
+    glossary:
+      title: 術語庫
+      pageDescription: 為你在意的詞語指定固定的譯文，並決定每份清單在哪些網站生效。
+      untitled: 未命名術語庫
+      noGlossaries: 還沒有術語庫。
+      enable:
+        title: 啟用
+        description: 把命中的術語一併傳給 LLM，讓它照你的寫法翻譯。術語庫是隨提示詞一起送出的，所以只對執行於 LLM 提供者的功能生效。
+      library:
+        title: 你的術語庫
+        description: 每個術語庫都有各自的術語和各自的網站清單，所以工作用的那套術語不會跟著你跑到其他地方。
+        button: 新增術語庫
+        capReached: "最多只能建立 $1 個術語庫。"
+        termUsage: "所有術語庫合計已使用 $1 / $2 條術語"
+      summary:
+        terms: "$1 條術語"
+        termsOne: 1 條術語
+        allSites: 所有網站
+        sites: "$1 個網站"
+        sitesOne: 1 個網站
+      editor:
+        docsLink: 如何使用？
+        sections:
+          terms: 術語
+          maintenance: 備份與刪除
+        details:
+          title: 名稱與描述
+          descriptionPlaceholder: 描述（選填）
+        enable:
+          title: 啟用
+          description: 停用的術語庫會保留其中的術語，但一條都不會傳送。
+        sites:
+          title: 網站
+          description: 限定這個術語庫只在特定網站生效。example.com 僅比對這一個網址；*.example.com 還包含子網域；example.com/docs/* 則只涵蓋網站的某一部分。
+          allSites: 留空則這個術語庫在所有網站都生效。
+          header: 網站
+        delete:
+          title: 刪除這個術語庫
+          description: 會移除這個術語庫以及其中的所有術語。如果之後可能還要用，請先匯出——刪除後無法復原。
+          dialog:
+            trigger: 刪除
+            title: 要刪除這個術語庫嗎？
+            description: "這個術語庫以及其中全部 $1 筆術語將被永久刪除。此操作無法復原。"
+            confirm: 刪除
+            cancel: 取消
+      addTerm:
+        title: 新增術語
+        description: 為術語指定你想要的譯文；留空則保持原文不變。
+      list:
+        title: 你的術語
+        description: 只有出現在段落中的術語，才會隨該段落一起傳送。
+      importExport:
+        title: 匯入與匯出
+        description: 詞彙是一個 CSV 檔，包含 source、target、targetLanguage、caseSensitive 四欄，即匯出所產生的格式。
+      sourcePlaceholder: 術語
+      targetPlaceholder: 譯文（留空則保持原文）
+      caseSensitive: 區分大小寫
+      add: 新增
+      searchPlaceholder: 搜尋術語
+      columnEnabled: 啟用
+      columnSource: 術語
+      columnTarget: 譯文
+      columnTargetLanguage: 目標語言
+      allLanguages: 所有語言
+      toggleTerm: "使用「$1」"
+      editTerm: "編輯「$1」"
+      keepOriginal: 保持原文
+      delete: 刪除
+      save: 儲存
+      cancel: 取消
+      loading: 正在載入…
+      empty: 還沒有術語。在上方新增，或匯入 CSV 檔案。
+      noMatches: 沒有與搜尋相符的術語。
+      previous: 上一頁
+      next: 下一頁
+      pageOf: "$1 / $2"
+      addError:
+        emptySource: 請先輸入術語。
+        tooLong: 該術語過長。
+        capReached: "所有術語庫的術語總數已達上限 $1 條。"
+        duplicate: 該術語已在術語庫中。
+      import: 匯入
+      export: 匯出
+      importModeMerge: 附加到清單
+      importModeReplace: 取代清單
+      importEmpty: 該檔案中找不到術語。
+      importMissingHeader: 該檔案不是 Read Frog 的詞彙庫匯出檔。它需要這些欄位：
+      importOverflow: "本次匯入會超出上限 $1 條術語，未做任何變更。"
+      importSuccess: "已匯入 $1 條新術語，更新 $2 條。"
+      importSkipped: "已略過 $1 列無效資料和 $2 筆重複項目。"
+      importNoValidRows: 這些列都無法匯入，未做任何變更。
+      importReplaceConfirm:
+        title: 取代整個清單？
+        description: "該術語庫下的全部 $1 條術語都會被刪除——包括所有目標語言，不只是目前選擇的那個——然後以該檔案的內容取代。此操作無法復原。"
+        confirm: 取代
+        cancel: 取消
+      deleteAll:
+        title: 刪除所有術語
+        description: 清空你的術語庫。如果之後可能還要用,請先匯出——刪除後無法復原。
+        deleting: 刪除中…
+        dialog:
+          title: 刪除所有術語
+          trigger: 全部刪除
+          confirm: 確認
+          cancel: 取消
+          description: "全部 $1 筆術語將被永久刪除。此操作無法復原。"
   contextMenu:
     title: 右鍵選單
     pageDescription: 控制瀏覽器右鍵選單裡的 Read Frog 選項。
@@ -852,6 +1196,9 @@ options:
         range:
           main: 主要內容
           all: 全部內容
+      translateTitle:
+        title: 翻譯分頁標題
+        description: 翻譯網頁時，同時翻譯瀏覽器分頁上的標題。關閉後保留原標題。
     hoverTranslation:
       title: 滑鼠停留翻譯
       enable:
@@ -906,6 +1253,8 @@ options:
       managePrompts: 管理提示詞
       communityPrompts: 取得或分享社群提示詞
       communityPromptsUrl: https://github.com/mengxi-ream/read-frog/discussions/820
+      variableReference: 變數詳解
+      variableReferenceUrl: https://readfrog.app/zh-TW/docs/page-translation/prompts/variables
       addPrompt: 新增提示詞
       default: 通用
       builtIn: 內建
@@ -1069,13 +1418,16 @@ options:
       title: 基礎設定
       enable:
         title: 開啟影片字幕
-        description: 在影片播放器控制列加上翻譯按鈕。目前只支援 YouTube。
+        description: 在 YouTube、X 和 Netflix 的影片播放器控制列加上翻譯按鈕。
       autoStart:
         title: 打開影片就翻譯
         description: 影片載入完成後自動開始翻譯字幕，不用再點按鈕。
       aiSegmentation:
         title: AI 智慧斷句
-        description: 讓 AI 把字幕重新切成讀起來完整的句子。時間軸也由 AI 判斷，可能出現錯位。需要設定 LLM 翻譯服務。
+        description: 讓 AI 把字幕重新切成完整句子，會增加翻譯回應時間。需要較強的 LLM，弱模型可能漏句或錯位。
+      wordLookupAction:
+        title: 點詞查詢指令
+        description: 點擊字幕裡的單字時執行的 AI 指令。預設是詞典，也可以換成你自己的指令。
     aiQuota:
       title: AI 字幕額度
       description: AI 利用語音轉文字技術取得任何影片的準確字幕
@@ -1095,14 +1447,14 @@ options:
       description: 顯示模式、位置、字型、顏色和背景，都對著預覽調
       customizeStyle: 自訂樣式
       displayMode:
-        title: 顯示模式
-        bilingual: 雙語模式
+        title: 字幕顯示類型
+        bilingual: 雙語字幕
         originalOnly: 僅原文
         translationOnly: 僅譯文
       translationPosition:
         title: 譯文位置
-        above: 上方
-        below: 下方
+        above: 原文上方
+        below: 原文下方
       generalSettings: 通用設定
       mainSubtitle: 主字幕
       translationSubtitle: 翻譯字幕
@@ -1185,6 +1537,9 @@ options:
           description: 這將刪除所有已快取的 AI 斷句結果。下次播放啟用 AI 斷句的影片時，將重新處理字幕。
   whatsNew:
     title: 最近更新
+    postType:
+      promotion: 優惠
+      update: 更新
   rateUs:
     title: 給予好評
   configMigration:
@@ -1225,7 +1580,22 @@ translation:
   sameLanguage: 來源語言和目標語言必須不同
   autoModeSameLanguage: 偵測到的語言「$1」與目標語言相同
   extensionContextInvalidated: 擴充功能已更新，請重新整理此頁面後再試一次。
+annotation:
+  annotate: "劃詞標註"
+  enterMode: "進入劃詞模式"
+  exitMode: "退出劃詞模式"
+  modeLabel: "劃詞模式"
+  noTextSelected: "沒有選取文字"
+  tooLong: "請選擇一個詞或短語來標註"
+  multipleParagraphs: "請在同一段落內選取文字來標註"
+  translatedTextUnsupported: "譯文無法標註"
+  unsupportedPlace: "這裡的文字無法標註"
+  markOnly: "已標記。這幾行之間放不下釋義。"
+  failed: "無法取得釋義"
+  remove: "移除標註"
 speak:
+  languageDetectionFallback: 已改用本機語言偵測
+  languageDetectionSettingsHint: 可在設定中更換可用的大型語言模型，或選擇本機偵測。
   fetchingAudio: 正在取得音訊…
   playingAudio: 正在播放音訊…
   failedToGenerateSpeech: 語音產生失敗
@@ -1238,6 +1608,7 @@ action:
   regenerate: 重新產生
   viewContextDetails: 前後文
   customizeCustomAction: 自訂「$1」動作
+  customActionLayoutFallback: 此結果無法依版面顯示，目前為簡化顯示。
   saveToNotebase: 儲存到筆記庫
   saveToNotebaseSaving: 儲存中…
   saveToNotebaseSuccess: 已儲存到筆記庫
@@ -1247,6 +1618,10 @@ action:
   saveToNotebaseLimitExceeded: 需要升級後才能儲存更多筆記庫內容
   saveToNotebaseTableUnavailable: 所選筆記庫已無法使用
   saveToNotebaseConnectionInvalid: 目前的筆記庫連線已過期，請到自訂 AI 指令重新整理並修復對應
+  saveToNotebaseInvalidContent: "AI 回傳的內容格式不對，沒有儲存。請重新執行一次再儲存。"
+  saveToNotebaseNoFieldSaved: "沒有儲存：這個指令沒有要存進筆記庫的欄位，請在設定中至少選一個。"
+  saveToNotebaseUndecidedTitle: "已儲存。這些欄位還沒決定存不存"
+  saveToNotebaseSkipUndecided: "都不儲存"
   saveToNotebaseNoMappings: 至少新增一個有效對應後才能儲存
   saveToNotebaseCreateTitle: 建立筆記庫？
   saveToNotebaseCreateDescription: 建立一個筆記庫，欄位會對應此自訂 AI 指令的輸出欄位，並將目前結果儲存為第一則筆記。
@@ -1268,18 +1643,25 @@ action:
   updatePayment: 更新付款方式
   openCustomActions: 開啟自訂 AI 指令
   openNotebase: 開啟筆記庫
+  reviewDueOne: "$1 張卡片需複習"
+  reviewDueOther: "$1 張卡片需複習"
   contextDetailsTitleLabel: 標題
   contextDetailsParagraphsLabel: 段落內容
   translation: 翻譯
   speak: 朗讀
   playing: 播放中
+  moreActions: 更多操作
+  pinToToolbar: 釘選到工具列
+  unpinFromToolbar: 從工具列取消釘選
+  dragToReorder: 拖曳以排序
+  addCustomAction: 新增自訂 AI 指令
 noteSuggestion:
   title: 猜你想存
   description: 選擇要存入筆記庫的詞，將來隨時複習
   save: 儲存
   saved: 已儲存
   staleSuggestion: 該建議已過期
-  toggleLabel: 顯示儲存建議
+  toggleLabel: 顯示猜你想存
 thinking:
   label: 思考中
   complete: 思考完成
@@ -1289,24 +1671,33 @@ shortcutKeySelector:
   placeholder: 請輸入快速鍵
 subtitles:
   sidebar:
-    close: 關閉 AI 總結
+    close: 關閉學習面板
+    needsSubtitles: 這部影片沒有字幕，建議先使用 AI 產生字幕。
     menu:
-      label: AI 總結
+      label: 學習
     summary:
+      tab: AI 總結
       generating: 正在產生總結…
       failedTitle: 產生失敗
       retry: 重試
       needsModel: 請先為影片字幕選擇一個 LLM 模型，才能總結這部影片。
       openSettings: 前往設定
-      needsSubtitles: 這部影片沒有字幕，建議先使用 AI 產生字幕。
+    transcript:
+      tab: 字幕
+      failedTitle: 字幕載入失敗
+      retry: 重試
+      emptyTitle: 沒有可顯示的字幕
+      backToCurrent: 回到目前
   loadingAiSubtitles: 正在載入 AI 字幕（預計 3 分鐘）
   aiSubtitlesHint: 透過先進 AI 辨識語音生成準確字幕，無官方字幕時依然可用。
   requestAiSubtitles: 請求 AI 字幕
   usingAiSubtitles: 正在使用 AI 字幕
+  settings: 字幕設定
   toggle:
     enabled: 字幕翻譯已開啟
     disabled: 字幕翻譯已關閉
   actions:
+    download: 下載字幕
     downloadTranslated: 下載翻譯字幕
     downloadTranslatedPreparing: 正在準備字幕，長影片可能需要更久
     downloadTranslatedTranslating: 正在翻譯字幕
@@ -1324,9 +1715,10 @@ subtitles:
     httpUnknown: HTTP 錯誤 $1
     invalidResponse: YouTube 字幕回應格式無效
     networkError: 取得字幕時發生網路錯誤
-    fetchSubTimeout: 取得 YouTube 字幕逾時
+    fetchSubTimeout: 取得字幕逾時
     buttonNotFound: 找不到字幕按鈕
     noSubtitlesFound: 這部影片沒有字幕
+    trackFileNotLoaded: 字幕載入失敗，請重新整理頁面後再試一次
     videoNotFound: 找不到影片元素
     controlsBarNotFound: 找不到控制列
     aiRateLimited: 請求過於頻繁，請稍後再試
@@ -1346,11 +1738,13 @@ subtitles:
     translatedExportIncomplete: 未能翻譯所有字幕行
     translatedExportSameLanguage: 來源語言和目標語言相同
 hostedAi:
-  ultraBadge:
-    tooltip: 需開通 Ultra 方案 · 點擊徽章獲取方案
+  planBadge:
+    pro: 需開通 Pro 或 Ultra 方案 · 點擊徽章獲取方案
+    ultra: 需開通 Ultra 方案 · 點擊徽章獲取方案
   availability:
     authenticationRequired: 登入後可使用
     ultraRequired: 需要 Ultra 方案
+    proRequired: 需要 Pro 或 Ultra 方案
     quotaExhausted: 額度已用完
     serviceUnavailable: 暫時無法使用
     usedPercent: "額度已使用 $1%"
@@ -1365,6 +1759,7 @@ hotkey:
   shift: Shift
   backtick: 反引號
   clickAndHold: 點選並按住
+  custom: 自訂快速鍵
 translationHub:
   searchLanguages: 搜尋語言…
   noLanguagesFound: 找不到語言
@@ -1376,6 +1771,8 @@ translationHub:
   translate: 翻譯
   copiedToClipboard: 翻譯已複製到剪貼簿！
   copyTranslation: 複製翻譯
+  speakSourceText: 朗讀原文
+  speakTranslation: 朗讀譯文
   expandCard: 展開卡片
   collapseCard: 摺疊卡片
   expandAllCards: 全部展開

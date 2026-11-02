@@ -1,7 +1,26 @@
 import type { SiteRule } from "@/types/config/site-rules"
 import { DEFAULT_TAG_SETS } from "@/utils/constants/dom-rules"
 import { logger } from "@/utils/logger"
-import { urlMatchesRule } from "./match"
+import { urlMatchesPattern } from "@/utils/url-pattern"
+
+/**
+ * Whether one rule claims `url`: any of its `matches` hits, and none of its
+ * `excludeMatches` does.
+ *
+ * Lives here rather than beside the pattern engine because it is the only thing
+ * in the codebase that knows what a `SiteRule` is, and `resolveSiteRule` below
+ * is its only caller.
+ */
+export function urlMatchesRule(
+  url: string,
+  rule: Pick<SiteRule, "matches" | "excludeMatches">,
+): boolean {
+  const matches = Array.isArray(rule.matches) ? rule.matches : [rule.matches]
+  if (!matches.some((pattern) => urlMatchesPattern(url, pattern))) {
+    return false
+  }
+  return !(rule.excludeMatches ?? []).some((pattern) => urlMatchesPattern(url, pattern))
+}
 
 /**
  * The merged outcome of every site rule matching one URL. Selector lists are
@@ -24,6 +43,8 @@ export interface ResolvedSiteRule {
   preserveTextSelector: string | null
   /** Inline atoms only (formula renderers); consumed by bilingual extraction. */
   atomSelector: string | null
+  /** Hidden regions the walk enters anyway; see `walkHiddenSelectors` in the schema. */
+  walkHiddenSelector: string | null
   /**
    * Tag-set families: `null` means no matched rule touched the family, so
    * consumers fall back to the shipped constant Set (hot path unchanged).
@@ -45,6 +66,8 @@ export interface ResolvedSiteRule {
   forceInlineTranslationTags: ReadonlySet<string> | null
   minCharacters: number | null
   minWords: number | null
+  injectIntoIframes: boolean | null
+  reflowLatexmlTextBoxes: boolean | null
   injectedCss: string | null
 }
 
@@ -58,6 +81,7 @@ export const EMPTY_RESOLVED_SITE_RULE: ResolvedSiteRule = {
   forceInlineStyleSelector: null,
   preserveTextSelector: null,
   atomSelector: null,
+  walkHiddenSelector: null,
   dontWalkTags: null,
   dontWalkTagsExplicitAdds: null,
   dontWalkButTranslateTags: null,
@@ -66,6 +90,8 @@ export const EMPTY_RESOLVED_SITE_RULE: ResolvedSiteRule = {
   forceInlineTranslationTags: null,
   minCharacters: null,
   minWords: null,
+  injectIntoIframes: null,
+  reflowLatexmlTextBoxes: null,
   injectedCss: null,
 }
 
@@ -265,6 +291,8 @@ export function resolveSiteRule(
 
   let minCharacters: number | null = null
   let minWords: number | null = null
+  let injectIntoIframes: boolean | null = null
+  let reflowLatexmlTextBoxes: boolean | null = null
   const dontWalkTagsExplicitAdds = new Set<string>()
   const cssParts: string[] = []
   for (const rule of matched) {
@@ -273,6 +301,12 @@ export function resolveSiteRule(
     }
     if (rule.minWords !== undefined) {
       minWords = rule.minWords
+    }
+    if (rule.injectIntoIframes !== undefined) {
+      injectIntoIframes = rule.injectIntoIframes
+    }
+    if (rule.reflowLatexmlTextBoxes !== undefined) {
+      reflowLatexmlTextBoxes = rule.reflowLatexmlTextBoxes
     }
     const injectedCssParts = [rule.injectedCss, ...(rule["injectedCss.add"] ?? [])]
     for (const css of injectedCssParts) {
@@ -335,6 +369,12 @@ export function resolveSiteRule(
     ),
     preserveTextSelector: joinSelectors([...preserveTextSelectors, ...atomSelectors]),
     atomSelector: joinSelectors(atomSelectors),
+    walkHiddenSelector: mergeSelectorDelta(
+      matched,
+      "walkHiddenSelectors",
+      "walkHiddenSelectors.add",
+      "walkHiddenSelectors.remove",
+    ),
     dontWalkTags: mergeTagSetDelta(
       matched,
       "dontWalkTags.add",
@@ -370,6 +410,8 @@ export function resolveSiteRule(
     ),
     minCharacters,
     minWords,
+    injectIntoIframes,
+    reflowLatexmlTextBoxes,
     injectedCss: cssParts.length > 0 ? cssParts.join("\n") : null,
   }
 }

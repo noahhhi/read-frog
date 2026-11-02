@@ -1,3 +1,4 @@
+import type { LangCodeISO6393 } from "@read-frog/definitions"
 import type { ViewId } from "./ui/subtitles-settings-panel/views"
 import type { SectionId } from "./ui/subtitles-sidebar/sections"
 import type { SubtitlesSource } from "@/utils/constants/subtitles"
@@ -26,8 +27,14 @@ export const adPlayingAtom = atom<boolean>(false)
 /** Scheduler’s current *translated* cue only (null when no translated cue covers now). */
 export const currentSubtitleAtom = atom<SubtitlesFragment | null>(null)
 
+export const sourceLanguageAtom = atom<LangCodeISO6393 | null>(null)
+
 /** Best original track (baseline or AI-segmented). Read-only for display/coordinator consumers. */
 export const sourceTrackAtom = atom<SubtitlesFragment[]>([])
+
+/** The scheduler's translated cues, for consumers that need the whole track
+ * rather than whichever one covers now. */
+export const translatedTrackAtom = atom<SubtitlesFragment[]>([])
 
 /**
  * Display cue: prefer a translated scheduler cue; otherwise fall back to the source track

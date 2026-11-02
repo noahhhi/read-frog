@@ -168,11 +168,11 @@ function makeUltraAccessStatus(accessAllowed: boolean) {
   // flag. The panel locks on the reason, so a fixture without one models a
   // state the wire cannot produce.
   //
-  // `requiresUltra` is left off deliberately. The real wire sets it on every
-  // advance tier, but it renders the Ultra badge inside the row's <label>,
-  // which then becomes part of the switch's accessible name and breaks the
-  // `getByRole("switch", { name })` queries below. These cases are about
-  // locking, not badging — the badge has its own test above.
+  // `upgradeTo` is left off deliberately. The real wire sets it on the advance
+  // tier of every non-Ultra account, but it renders the plan badge inside the
+  // row's <label>, which then becomes part of the switch's accessible name and
+  // breaks the `getByRole("switch", { name })` queries below. These cases are
+  // about locking, not badging — the badge has its own test above.
   const advance = accessAllowed
     ? { accessAllowed: true, available: true, unavailableReason: null }
     : { accessAllowed: false, available: false, unavailableReason: "ultra_required" as const }
@@ -378,8 +378,9 @@ describe("ProvidersConfig", () => {
 
   it("counts default assignments on the free Built-in AI card badge", () => {
     // Note suggestion defaults to the OpenAI provider, so only the built-in
-    // Dictionary action counts on the free card; the Ultra card has nothing
-    // assigned and shows no badge.
+    // Dictionary, Sentence Analysis and Improve Writing actions count on the
+    // free card (Improve Writing is turned off, but still assigned to it); the
+    // Ultra card has nothing assigned and shows no badge.
     const { container } = renderProvidersConfig()
 
     const freeCard = container.querySelector(`[data-provider-id="${BUILT_IN_AI_PROVIDER_ID}"]`)
@@ -391,7 +392,7 @@ describe("ProvidersConfig", () => {
     }
 
     expect(
-      within(freeCard).getByText("options.apiProviders.badges.featureCount:1"),
+      within(freeCard).getByText("options.apiProviders.badges.featureCount:3"),
     ).toBeInTheDocument()
     expect(
       within(ultraCard).queryByText(/options\.apiProviders\.badges\.featureCount/),
@@ -411,7 +412,7 @@ describe("ProvidersConfig", () => {
     }
 
     expect(
-      within(freeCard).getByText("options.apiProviders.badges.featureCount:2"),
+      within(freeCard).getByText("options.apiProviders.badges.featureCount:4"),
     ).toBeInTheDocument()
   })
 

@@ -371,6 +371,22 @@ export function unregisterBilingualTranslationState(state: BilingualTranslationS
   state.status = "disposed"
 }
 
+/**
+ * Re-key a live state onto an identical copy of its layout source, after its
+ * wrapper has been moved into that copy (see carryTranslationsAcrossRewrite).
+ * The wrapper index needs no update: the wrapper object itself moved.
+ */
+export function rebindBilingualTranslationState(
+  state: BilingualTranslationState,
+  layoutSource: HTMLElement,
+): void {
+  if (bilingualTranslationsBySource.get(state.layoutSource) === state) {
+    bilingualTranslationsBySource.delete(state.layoutSource)
+  }
+  state.layoutSource = layoutSource
+  bilingualTranslationsBySource.set(layoutSource, state)
+}
+
 // Capitulation counter for wrapper-content fights (#1918): a site script that
 // deterministically rewrites our wrapper content (NBSP normalizers, truncation
 // scripts) would otherwise loop the budgeted retranslation forever — the
@@ -445,6 +461,52 @@ export function isBilingualTranslationStateCurrent(state: BilingualTranslationSt
   )
 }
 
+/**
+ * Nearest ancestor (or the node itself) registered as a bilingual layout source
+ * or virtual paragraph group — regardless of whether that registration is still
+ * current.
+ *
+ * A node ADDED inside a registered source is that source's business, never a
+ * translation unit of its own: `observeTopLevelParagraphs` computes "top-level
+ * paragraph" RELATIVE TO ITS WALK ROOT, so walking the addition promotes an
+ * inline span to a unit and gives it a second wrapper inside the enclosing one
+ * (#2185).
+ *
+ * Scope: this covers the childList route only. The attribute/reveal route
+ * (`collectNewlyWalkableSubtrees` -> `observeTopLevelParagraphs(unblocked)`)
+ * still creates a walk root inside a registered source, deliberately — the
+ * duality below does NOT hold there, because `collectRawSource` drops
+ * non-translatable children entirely, so revealing one changes what is
+ * translatable WITHOUT changing `collectHostText`. The enclosing source stays
+ * current, nothing would retranslate it, and skipping that walk would strand
+ * revealed accordion / "show more" content permanently.
+ *
+ * The currency-independence is what makes refusing that walk safe. A registered
+ * source is in exactly one of two states, and both are already handled:
+ *  • current — `collectHostText` still equals its snapshot, so the addition
+ *    brought no new host text (a hover decorator only re-parents existing Text);
+ *  • stale — `findStaleBilingualLayoutSource` below resolves the SAME element
+ *    from the SAME record in the same pass, so `retranslateChangedSource` is
+ *    already scheduled for it under the #1831 budget.
+ * There is no third case, so callers strand nothing by skipping the walk.
+ *
+ * `parentElement` only — this must NEVER cross a shadow host. `collectHostText`
+ * is shadow-blind, so a source found across a host could not vouch for text
+ * inside the shadow tree and that text would be skipped forever.
+ * (`PageTranslationManager.isSourceWalkBlocked` crosses hosts on purpose; do
+ * not copy its shape here.)
+ */
+export function findEnclosingBilingualLayoutSource(node: Node): HTMLElement | undefined {
+  let current = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement
+  while (current) {
+    if (virtualParagraphGroupsBySource.has(current) || bilingualTranslationsBySource.has(current)) {
+      return current
+    }
+    current = current.parentElement
+  }
+  return undefined
+}
+
 export function findStaleBilingualLayoutSource(node: Node): HTMLElement | undefined {
   let current = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement
   while (current) {
@@ -503,12 +565,16 @@ export function isVirtualParagraphGroupCurrent(
   )
   for (const { source, parent, originalValue, createdTails } of group.splitRecords) {
     const fragments = [source, ...createdTails]
-    let previousIndex = -1
+    // One forward sibling walk proves the fragments are in order. Indexing each
+    // fragment in a fresh copy of `parent.childNodes` cost O(tails × children)
+    // per check, and every unit and mutation record re-checks: a 50k-character
+    // GameFAQs <pre> split into ~225 units froze the page for ~13 s.
+    let cursor: ChildNode | null = null
     for (const fragment of fragments) {
       if (!fragment.isConnected || fragment.parentNode !== parent) return false
-      const index = [...parent.childNodes].indexOf(fragment)
-      if (index <= previousIndex) return false
-      previousIndex = index
+      cursor = cursor === null ? fragment : cursor.nextSibling
+      while (cursor !== null && cursor !== fragment) cursor = cursor.nextSibling
+      if (cursor === null) return false
     }
     if (fragments.map((fragment) => fragment.data).join("") !== originalValue) return false
   }

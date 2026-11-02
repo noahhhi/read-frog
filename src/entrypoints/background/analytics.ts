@@ -1,12 +1,19 @@
-import type { LangCodeISO6393 } from "@read-frog/definitions"
+import type { LangCodeISO6393, NoteSaveSurface } from "@read-frog/definitions"
 import type { CaptureResult } from "posthog-js/dist/module.no-external"
-import type { AnalyticsFeature, FeatureUsedEventProperties } from "@/types/analytics"
+import type {
+  AnalyticsFailureReason,
+  AnalyticsFeature,
+  FeatureUsedEventProperties,
+  SurfaceByFeature,
+} from "@/types/analytics"
+import { langCodeISO6393Schema, NOTE_SAVE_SURFACES } from "@read-frog/definitions"
 import { posthog } from "posthog-js/dist/module.no-external"
+import { match } from "ts-pattern"
 import { storage } from "#imports"
 import { env } from "@/env"
-import { ANALYTICS_FEATURE } from "@/types/analytics"
+import { ANALYTICS_FAILURE_REASONS, ANALYTICS_FEATURE, NOTE_SAVE_PATHS } from "@/types/analytics"
+import { translationModeSchema } from "@/types/config/translate"
 import { normalizeFeatureProviderAnalytics } from "@/utils/analytics-provider"
-import { getLocalConfig } from "@/utils/config/storage"
 import {
   ANALYTICS_ENABLED_STORAGE_KEY,
   ANALYTICS_FEATURE_USED_EVENT,
@@ -16,26 +23,101 @@ import {
 import { EXTENSION_VERSION } from "@/utils/constants/app"
 import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { logger } from "@/utils/logger"
-import { onMessage } from "@/utils/message"
+import { getAnalyticsSiteDomain } from "@/utils/url"
 import {
   createStorageFeatureUsageCache,
   getFeatureUsageDay,
   type FeatureUsageCache,
+  type FeatureUsageCacheKey,
 } from "./analytics-feature-cache"
+type BackgroundFeatureUsedEventProperties = FeatureUsedEventProperties & { site_domain?: string }
 
-type BackgroundFeatureUsedEventProperties = FeatureUsedEventProperties & {
-  target_language?: LangCodeISO6393
+type FeatureSurfaceLists = { [F in AnalyticsFeature]: readonly SurfaceByFeature[F][] }
+
+type UnlistedFeatureSurfaces<T extends FeatureSurfaceLists> = {
+  [
+    F in AnalyticsFeature as [Exclude<SurfaceByFeature[F], T[F][number]>] extends [never]
+      ? never
+      : F
+  ]: Exclude<SurfaceByFeature[F], T[F][number]>
+}
+
+/**
+ * `satisfies FeatureSurfaceLists` would only reject surfaces the types do not
+ * allow. This also rejects a typed surface the list leaves out, which the
+ * background would otherwise drop at runtime without any error.
+ */
+function listEveryFeatureSurface<const T extends FeatureSurfaceLists>(
+  surfaces: T &
+    (keyof UnlistedFeatureSurfaces<T> extends never
+      ? unknown
+      : { unlistedSurfaces: UnlistedFeatureSurfaces<T> }),
+): T {
+  return surfaces
+}
+
+const FEATURE_SURFACES = listEveryFeatureSurface({
+  page_translation: [
+    "popup",
+    "floating_button",
+    "context_menu",
+    "page_auto",
+    "shortcut",
+    "touch_gesture",
+  ],
+  selection_translation: ["selection_toolbar", "context_menu", "shortcut"],
+  custom_ai_action: ["selection_toolbar", "context_menu", "shortcut", "video_subtitles"],
+  input_translation: ["input_translation"],
+  translation_hub: ["translation_hub"],
+  video_subtitles: ["video_subtitles", "video_subtitles_auto", "shortcut"],
+  text_to_speech: [
+    "selection_toolbar",
+    "context_menu",
+    "shortcut",
+    "tts_settings",
+    "translation_hub",
+    "video_subtitles",
+  ],
+  note_suggestion: ["selection_toolbar"],
+  note_save: ["selection_toolbar", "video_subtitles"],
+  glossary: ["page_translation", "video_subtitles", "selection_toolbar", "input_translation"],
+  word_annotation: ["selection_toolbar", "shortcut", "annotation_mode"],
+})
+
+/** The tab a feature was used in, as reported by the message sender. */
+export interface FeatureUsedEventTab {
+  id?: number
+  url?: string
 }
 
 /**
  * Features whose events are multi-step funnels (every step must be recorded)
- * and whose volume is bounded elsewhere, so they bypass the
+ * and whose volume is bounded by deliberate user actions, so they bypass the
  * once-per-day-per-feature adoption throttle instead of losing their second
- * same-day event to it.
+ * same-day event to it: a suggestion is shown once per popover session and
+ * accepted at most once, and note saves follow an explicit Save click.
  */
 const FEATURES_BYPASSING_DAILY_FEATURE_CACHE = new Set<AnalyticsFeature>([
+  ANALYTICS_FEATURE.NOTE_SAVE,
   ANALYTICS_FEATURE.NOTE_SUGGESTION,
 ])
+
+/**
+ * Custom actions keep the daily throttle per outcome and failure reason rather
+ * than per feature: a day's first success would otherwise hide every later
+ * failure, while one event per attempt would send a hostname for every run.
+ */
+function getDailyFeatureCacheKey(
+  properties: BackgroundFeatureUsedEventProperties,
+): FeatureUsageCacheKey {
+  if (properties.feature !== ANALYTICS_FEATURE.CUSTOM_AI_ACTION) {
+    return properties.feature
+  }
+
+  return properties.outcome === "failure"
+    ? `${properties.feature}:failure:${properties.failure_reason ?? "unknown"}`
+    : `${properties.feature}:success`
+}
 
 interface BackgroundAnalyticsClient {
   capture: (...args: Parameters<typeof posthog.capture>) => void
@@ -43,17 +125,7 @@ interface BackgroundAnalyticsClient {
   register: (...args: Parameters<typeof posthog.register>) => void
 }
 
-type BackgroundAnalyticsMessageHandler<TData, TResult> = (message: {
-  data: TData
-}) => TResult | Promise<TResult>
-
 type LocalStorageKey = `local:${string}`
-
-interface BackgroundAnalyticsMessageRegistrar {
-  registerTrackFeatureUsedEvent: (
-    handler: BackgroundAnalyticsMessageHandler<FeatureUsedEventProperties, void>,
-  ) => void
-}
 
 interface BackgroundAnalyticsRuntime {
   apiHost?: string
@@ -65,22 +137,12 @@ interface BackgroundAnalyticsRuntime {
   featureUsageCache?: FeatureUsageCache
   getCurrentDate: () => Date
   getStorageItem: (key: LocalStorageKey) => Promise<unknown>
-  getTargetLanguage: () => Promise<LangCodeISO6393 | undefined>
-  messageRegistrar: BackgroundAnalyticsMessageRegistrar
   posthog: BackgroundAnalyticsClient
   setStorageItem: (key: LocalStorageKey, value: unknown) => Promise<void>
   warn: typeof logger.warn
 }
 
 const DEV_POSTHOG_TEST_UUID = "00000000-0000-0000-0000-000000000001"
-
-function createDefaultMessageRegistrar(): BackgroundAnalyticsMessageRegistrar {
-  return {
-    registerTrackFeatureUsedEvent(handler) {
-      onMessage("trackFeatureUsedEvent", handler)
-    },
-  }
-}
 
 function normalizeDistinctIdOverride(value: string | undefined): string | undefined {
   if (typeof value !== "string") {
@@ -122,11 +184,6 @@ function createDefaultRuntime(): BackgroundAnalyticsRuntime {
       : undefined,
     getCurrentDate: () => new Date(),
     getStorageItem,
-    getTargetLanguage: async () => {
-      const config = await getLocalConfig()
-      return config?.language.targetCode
-    },
-    messageRegistrar: createDefaultMessageRegistrar(),
     posthog,
     setStorageItem,
     warn: logger.warn,
@@ -303,6 +360,210 @@ export function filterAnalyticsCaptureResult(data: CaptureResult | null): Captur
   return mutableFilteredData
 }
 
+function isLanguageCode(value: unknown): value is LangCodeISO6393 {
+  return langCodeISO6393Schema.safeParse(value).success
+}
+
+function isCharCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+}
+
+const FAILURE_REASONS: ReadonlySet<string> = new Set(ANALYTICS_FAILURE_REASONS)
+const NOTE_SAVE_SURFACE_VALUES: ReadonlySet<string> = new Set(NOTE_SAVE_SURFACES)
+const NOTE_SAVE_PATH_VALUES: ReadonlySet<string> = new Set(NOTE_SAVE_PATHS)
+
+function isFailureReason(value: unknown): value is AnalyticsFailureReason {
+  return typeof value === "string" && FAILURE_REASONS.has(value)
+}
+
+function isNoteSaveSurface(value: unknown): value is NoteSaveSurface {
+  return typeof value === "string" && NOTE_SAVE_SURFACE_VALUES.has(value)
+}
+
+/** Pick only documented event fields, including for messages from older content scripts. */
+function normalizeFeatureUsedEvent(
+  properties: FeatureUsedEventProperties,
+  tab?: FeatureUsedEventTab,
+): BackgroundFeatureUsedEventProperties | null {
+  const { feature } = properties
+  if (!Object.hasOwn(FEATURE_SURFACES, feature)) return null
+  if (
+    feature === "note_suggestion" &&
+    properties.action_id !== "suggestion_shown" &&
+    properties.action_id !== "suggestion_accepted"
+  ) {
+    return null
+  }
+  if (!(FEATURE_SURFACES[feature] as readonly string[]).includes(properties.surface)) return null
+  if (properties.outcome !== "success" && properties.outcome !== "failure") return null
+  if (typeof properties.latency_ms !== "number" || !Number.isFinite(properties.latency_ms)) {
+    return null
+  }
+
+  const common = {
+    outcome: properties.outcome,
+    latency_ms: properties.latency_ms,
+    ...normalizeFeatureProviderAnalytics(properties.provider, properties.backend_kind),
+    ...(properties.outcome === "failure" && isFailureReason(properties.failure_reason)
+      ? { failure_reason: properties.failure_reason }
+      : {}),
+  }
+  const siteDomain = getAnalyticsSiteDomain(tab?.url)
+  const siteProperties = siteDomain ? { site_domain: siteDomain } : {}
+
+  // Unknown steps (e.g. from a newer content script) fall through to null at
+  // runtime, while a step added to the types without a branch fails to compile.
+  return match(properties)
+    .with({ feature: "page_translation" }, (event) => {
+      if (!isLanguageCode(event.target_language)) return null
+      if (!translationModeSchema.safeParse(event.translation_mode).success) return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        target_language: event.target_language,
+        translation_mode: event.translation_mode,
+        ...(isLanguageCode(event.source_language)
+          ? { source_language: event.source_language }
+          : {}),
+      }
+    })
+    .with({ feature: "selection_translation" }, (event) => {
+      if (!isLanguageCode(event.target_language) || !isCharCount(event.char_count)) return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        target_language: event.target_language,
+        char_count: event.char_count,
+      }
+    })
+    .with({ feature: "input_translation" }, (event) => {
+      if (!isLanguageCode(event.target_language) || !isCharCount(event.char_count)) return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        target_language: event.target_language,
+        char_count: event.char_count,
+      }
+    })
+    .with({ feature: "translation_hub" }, (event) => {
+      if (!isLanguageCode(event.target_language) || !isCharCount(event.char_count)) return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        target_language: event.target_language,
+        char_count: event.char_count,
+      }
+    })
+    .with({ feature: "video_subtitles" }, (event) => {
+      if (!isLanguageCode(event.target_language)) return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        target_language: event.target_language,
+      }
+    })
+    .with({ feature: "glossary" }, (event) => {
+      if (!isLanguageCode(event.target_language)) return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        target_language: event.target_language,
+      }
+    })
+    .with({ feature: "custom_ai_action" }, (event) => {
+      if (typeof event.action_id !== "string" || !event.action_id) return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        action_id: event.action_id,
+        ...(typeof event.action_name === "string" ? { action_name: event.action_name } : {}),
+      }
+    })
+    .with({ feature: "note_suggestion", action_id: "suggestion_shown" }, (event) => ({
+      ...common,
+      ...siteProperties,
+      feature: event.feature,
+      surface: event.surface,
+      action_id: event.action_id,
+    }))
+    .with({ feature: "note_suggestion", action_id: "suggestion_accepted" }, (event) => {
+      if (typeof event.action_name !== "string") return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        action_id: event.action_id,
+        action_name: event.action_name,
+      }
+    })
+    .with({ feature: "note_save", action_id: "save_requested" }, (event) => {
+      if (!isNoteSaveSurface(event.save_source) || !isCharCount(event.note_count)) return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        action_id: event.action_id,
+        save_source: event.save_source,
+        note_count: event.note_count,
+      }
+    })
+    .with({ feature: "note_save", action_id: "save_completed" }, (event) => {
+      if (
+        !isNoteSaveSurface(event.save_source) ||
+        !isCharCount(event.note_count) ||
+        !NOTE_SAVE_PATH_VALUES.has(event.path) ||
+        typeof event.is_guide !== "boolean"
+      ) {
+        return null
+      }
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        action_id: event.action_id,
+        save_source: event.save_source,
+        note_count: event.note_count,
+        path: event.path,
+        is_guide: event.is_guide,
+      }
+    })
+    .with({ feature: "word_annotation" }, (event) => {
+      if (!isCharCount(event.char_count) || !isLanguageCode(event.target_language)) return null
+      return {
+        ...common,
+        ...siteProperties,
+        feature: event.feature,
+        surface: event.surface,
+        char_count: event.char_count,
+        target_language: event.target_language,
+      }
+    })
+    .with({ feature: "text_to_speech" }, (event) => ({
+      ...common,
+      ...siteProperties,
+      feature: event.feature,
+      surface: event.surface,
+    }))
+    .exhaustive(() => null)
+}
+
 export function createBackgroundAnalytics(
   runtime: BackgroundAnalyticsRuntime = createDefaultRuntime(),
 ) {
@@ -381,17 +642,16 @@ export function createBackgroundAnalytics(
     return clientPromise
   }
 
-  async function captureFeatureUsedEvent(properties: FeatureUsedEventProperties): Promise<boolean> {
+  async function captureFeatureUsedEvent(
+    properties: BackgroundFeatureUsedEventProperties,
+  ): Promise<boolean> {
     try {
       const client = await getPostHogClient()
       if (!client) {
         return false
       }
 
-      client.capture(
-        ANALYTICS_FEATURE_USED_EVENT,
-        await buildBackgroundFeatureUsedEventProperties(properties),
-      )
+      client.capture(ANALYTICS_FEATURE_USED_EVENT, properties)
       return true
     } catch (error) {
       runtime.warn(
@@ -420,15 +680,16 @@ export function createBackgroundAnalytics(
   }
 
   async function captureFeatureUsedEventWithCache(
-    properties: FeatureUsedEventProperties,
+    properties: BackgroundFeatureUsedEventProperties,
     featureUsageCache: FeatureUsageCache,
   ): Promise<void> {
     await runFeatureCaptureSerially(properties.feature, async () => {
       const currentDay = getFeatureUsageDay(runtime.getCurrentDate())
+      const cacheKey = getDailyFeatureCacheKey(properties)
       let lastReportedDay: string | undefined
 
       try {
-        lastReportedDay = await featureUsageCache.getLastReportedDay(properties.feature)
+        lastReportedDay = await featureUsageCache.getLastReportedDay(cacheKey)
       } catch (error) {
         runtime.warn("[Analytics] Failed to read the daily feature usage cache", error)
       }
@@ -442,32 +703,35 @@ export function createBackgroundAnalytics(
       }
 
       try {
-        await featureUsageCache.setLastReportedDay(properties.feature, currentDay)
+        await featureUsageCache.setLastReportedDay(cacheKey, currentDay)
       } catch (error) {
         runtime.warn("[Analytics] Failed to write the daily feature usage cache", error)
       }
     })
   }
 
+  /**
+   * Single entry point for `feature_used`. Callers report values they observed;
+   * the background validates them and adds the sender tab's hostname.
+   */
   async function captureFeatureUsedEventInBackground(
     properties: FeatureUsedEventProperties,
+    tab?: FeatureUsedEventTab,
   ): Promise<void> {
     if (!(await isAnalyticsEnabled())) {
       return
     }
 
-    const normalizedProperties: FeatureUsedEventProperties = {
-      ...properties,
-      ...normalizeFeatureProviderAnalytics(properties.provider, properties.backend_kind),
+    const normalizedProperties = normalizeFeatureUsedEvent(properties, tab)
+    if (!normalizedProperties) {
+      runtime.warn("[Analytics] Dropped an incomplete feature_used event")
+      return
     }
 
     // Funnel features must record every step (e.g. note-suggestion shown vs
-    // accepted), so they skip the once-per-day-per-feature adoption throttle —
-    // the daily cache keys on feature only and would drop the second same-day
-    // event. Volume stays bounded: a note-suggestion shown event requires a
-    // manual selection translation that produced a valid suggestion (once per
-    // popover session), and error retries are capped by the per-provider
-    // failure cooldown.
+    // accepted), so they skip the once-per-day adoption throttle, which would
+    // drop the second same-day event. Their volume follows deliberate user
+    // actions; see FEATURES_BYPASSING_DAILY_FEATURE_CACHE.
     if (
       !runtime.featureUsageCache ||
       FEATURES_BYPASSING_DAILY_FEATURE_CACHE.has(normalizedProperties.feature)
@@ -479,45 +743,11 @@ export function createBackgroundAnalytics(
     await captureFeatureUsedEventWithCache(normalizedProperties, runtime.featureUsageCache)
   }
 
-  async function getBackgroundFeatureUsedEventProperties(): Promise<
-    Partial<BackgroundFeatureUsedEventProperties>
-  > {
-    const backgroundProperties: Partial<BackgroundFeatureUsedEventProperties> = {}
-
-    try {
-      const targetLanguage = await runtime.getTargetLanguage()
-      if (targetLanguage) {
-        backgroundProperties.target_language = targetLanguage
-      }
-    } catch (error) {
-      runtime.warn("[Analytics] Failed to read target language for analytics event", error)
-    }
-
-    return backgroundProperties
-  }
-
-  async function buildBackgroundFeatureUsedEventProperties(
-    properties: FeatureUsedEventProperties,
-  ): Promise<BackgroundFeatureUsedEventProperties> {
-    return {
-      ...properties,
-      ...(await getBackgroundFeatureUsedEventProperties()),
-    }
-  }
-
-  function setupAnalyticsMessageHandlers(): void {
-    runtime.messageRegistrar.registerTrackFeatureUsedEvent(async (message) => {
-      await captureFeatureUsedEventInBackground(message.data)
-    })
-  }
-
   return {
     captureFeatureUsedEventInBackground,
-    setupAnalyticsMessageHandlers,
   }
 }
 
 const backgroundAnalytics = createBackgroundAnalytics()
 
-export const { captureFeatureUsedEventInBackground, setupAnalyticsMessageHandlers } =
-  backgroundAnalytics
+export const { captureFeatureUsedEventInBackground } = backgroundAnalytics

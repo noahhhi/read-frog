@@ -1,6 +1,8 @@
 import { IconSettings } from "@tabler/icons-react"
 import { useAtom, useAtomValue } from "jotai"
 import { browser } from "#imports"
+import { UpgradePlanBadge } from "@/components/badges/upgrade-plan-badge"
+import { useHostedAiProviderOptions } from "@/components/llm-providers/use-hosted-ai-provider-options"
 import ProviderIcon from "@/components/provider-icon"
 import { useTheme } from "@/components/providers/theme-provider"
 import { Button } from "@/components/ui/base-ui/button"
@@ -23,6 +25,8 @@ import {
 } from "@/utils/config/helpers"
 import { PROVIDER_ITEMS } from "@/utils/constants/providers"
 import { i18n } from "@/utils/i18n"
+import { getProviderLogo, isSystemProviderSelectorItem } from "@/utils/providers/provider-display"
+import { getSelectableProvidersForCapability } from "@/utils/providers/provider-registry"
 import { selectedProviderIdsAtom } from "../atoms"
 
 export function TranslationServiceDropdown() {
@@ -45,16 +49,22 @@ export function TranslationServiceDropdown() {
   const llmProviders = getLLMProvidersConfig(filteredProvidersConfig)
   const nonAPIProviders = getNonAPIProvidersConfig(filteredProvidersConfig)
   const pureAPIProviders = getPureAPIProvidersConfig(filteredProvidersConfig)
+  const selectableProviders = getSelectableProvidersForCapability(
+    "pageTranslation",
+    providersConfig,
+  )
+  const providerOptions = useHostedAiProviderOptions("pageTranslation", selectableProviders)
+  const builtInProviders = providerOptions.filter(isSystemProviderSelectorItem)
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
       <Select multiple value={selectedIds} onValueChange={setSelectedIds}>
-        <SelectTrigger className="min-w-52">
-          <SelectValue placeholder={i18n.t("translateService.selectServices")}>
+        <SelectTrigger className="w-52 min-w-0">
+          <SelectValue className="min-w-0" placeholder={i18n.t("translateService.selectServices")}>
             {selectedIds.length > 0 ? (
-              <div className="flex items-center gap-2">
-                <span>{i18n.t("translateService.translationProviders")}</span>
-                <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{i18n.t("translateService.translationProviders")}</span>
+                <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
                   {selectedIds.length}
                 </span>
               </div>
@@ -91,12 +101,30 @@ export function TranslationServiceDropdown() {
               ))}
             </SelectGroup>
           )}
+          {builtInProviders.length > 0 && (
+            <SelectGroup>
+              <SelectLabel>{i18n.t("translateService.builtInModels")}</SelectLabel>
+              {builtInProviders.map((provider) => (
+                <SelectItem key={provider.id} value={provider.id} disabled={provider.disabled}>
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                    <ProviderIcon
+                      logo={getProviderLogo(provider, theme)}
+                      name={provider.name}
+                      size="sm"
+                    />
+                    {provider.upgradeTo && <UpgradePlanBadge plan={provider.upgradeTo} />}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
         </SelectContent>
       </Select>
 
       <Button
         variant="outline"
         size="icon"
+        className="shrink-0"
         onClick={handleConfigureAPI}
         title={i18n.t("translateService.configureAPI")}
       >

@@ -51,6 +51,13 @@ export const siteRuleSchema = z.object({
   atomSelectors: z.array(z.string()).optional(),
   "atomSelectors.add": z.array(z.string()).optional(),
   "atomSelectors.remove": z.array(z.string()).optional(),
+  // Hidden regions the walk still enters: menus and panels a site shows with
+  // pure CSS (`:hover`, `:checked`) change no DOM when they open, so a walk
+  // that skipped them while hidden would never come back. Their content is
+  // labeled up front and translated through the usual viewport gate.
+  walkHiddenSelectors: z.array(z.string()).optional(),
+  "walkHiddenSelectors.add": z.array(z.string()).optional(),
+  "walkHiddenSelectors.remove": z.array(z.string()).optional(),
   // Tag-NAME lists (not CSS selectors) that patch the built-in DOM tag sets
   // (see DEFAULT_TAG_SETS in utils/constants/dom-rules). Delta-only by design:
   // there is deliberately no bare base key, so a rule can never be misread as
@@ -68,6 +75,15 @@ export const siteRuleSchema = z.object({
   "forceInlineTranslationTags.remove": z.array(z.string()).optional(),
   minCharacters: z.number().int().min(0).optional(),
   minWords: z.number().int().min(0).optional(),
+  // Same-origin frames lazily load selection tools on a real gesture by
+  // default. True eagerly injects host + selection in existing/future frames,
+  // including cross-origin ones; false disables lazy activation too. Matching
+  // frame URLs can opt in independently. Refresh after changing this setting.
+  injectIntoIframes: z.boolean().optional(),
+  // LaTeXML (arXiv HTML) draws some prose boxes as fixed-size SVG pictures,
+  // which the walk never enters. True reflows text-only ones into temporary
+  // HTML cards so they can be translated; SVG diagrams stay untouched.
+  reflowLatexmlTextBoxes: z.boolean().optional(),
   injectedCss: z.string().max(MAX_CUSTOM_CSS_LENGTH).optional(),
   "injectedCss.add": z.array(z.string().max(MAX_CUSTOM_CSS_LENGTH)).optional(),
   enabled: z.boolean().optional(),

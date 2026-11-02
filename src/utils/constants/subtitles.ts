@@ -9,6 +9,7 @@ export const PAUSE_TIMEOUT_MS = 1_000
 export const MAX_WORDS = 15
 export const MAX_CHARS_CJK = 30
 export const SENTENCE_END_PATTERN = /[,.。?？！!；;…؟۔\n]$/
+export const MIN_STANDALONE_CUE_DURATION_MS = 1000
 
 // On-demand translation constants
 export const TRANSLATION_BATCH_SIZE = 5
@@ -21,6 +22,8 @@ export const READ_FROG_SUBTITLES_UI_HOST_ID = "read-frog-subtitles-ui-host"
 export const TRANSLATE_BUTTON_CONTAINER_ID = "read-frog-subtitles-translate-button-container"
 export const SUBTITLES_SIDEBAR_HOST_ID = "read-frog-subtitles-sidebar-host"
 export const HIDE_NATIVE_CAPTIONS_STYLE_ID = "read-frog-hide-native-captions"
+
+export const DEFAULT_SUBTITLES_UI_Z_INDEX = 60
 
 // Class names
 export const SUBTITLES_VIEW_CLASS = "read-frog-subtitles-view"
@@ -40,6 +43,8 @@ export const YOUTUBE_NAVIGATE_FINISH_EVENT = "yt-navigate-finish"
 export const YOUTUBE_NATIVE_SUBTITLES_CLASS = ".ytp-caption-window-container"
 export const PLAYER_DATA_REQUEST_TYPE = "READ_FROG_GET_PLAYER_DATA"
 export const PLAYER_DATA_RESPONSE_TYPE = "READ_FROG_PLAYER_DATA"
+// The player is on the requested video but has not received its player response yet.
+export const PLAYER_RESPONSE_PENDING_ERROR = "PLAYER_RESPONSE_PENDING"
 export const WAIT_TIMEDTEXT_REQUEST_TYPE = "READ_FROG_WAIT_TIMEDTEXT"
 export const WAIT_TIMEDTEXT_RESPONSE_TYPE = "READ_FROG_TIMEDTEXT_READY"
 export const TIMEDTEXT_WAIT_TIMEOUT_MS = 5000
@@ -47,9 +52,50 @@ export const ENSURE_SUBTITLES_REQUEST_TYPE = "READ_FROG_ENSURE_SUBTITLES"
 export const ENSURE_SUBTITLES_RESPONSE_TYPE = "READ_FROG_ENSURE_SUBTITLES_DONE"
 export const POST_MESSAGE_TIMEOUT_MS = 6000
 
+// TextTrack mechanism
+export const TEXT_TRACK_CUE_WAIT_TIMEOUT_MS = 8000
+export const TEXT_TRACK_CUE_POLL_INTERVAL_MS = 100
+export const TEXT_TRACK_NATIVE_REHIDE_DELAY_MS = 500
+
+// x.com specific
+export const XCOM_PLAYER_CONTAINER_ATTRIBUTE = "data-read-frog-xcom-player-container"
+export const XCOM_CONTROLS_CONTAINER_ATTRIBUTE = "data-read-frog-xcom-controls"
+export const XCOM_PLAYER_CONTAINER_SELECTOR = `[${XCOM_PLAYER_CONTAINER_ATTRIBUTE}="true"]`
+export const XCOM_CONTROLS_CONTAINER_SELECTOR = `[${XCOM_CONTROLS_CONTAINER_ATTRIBUTE}="true"]`
+export const XCOM_STATUS_POLL_INTERVAL_MS = 2000
+export const XCOM_PLAYER_MUTATION_DEBOUNCE_MS = 50
+// x.com renders captions from a partial duplicate track labelled like this.
+export const XCOM_RENDER_TRACK_LABEL = "clone"
+
+// Netflix specific
+export const NETFLIX_WATCH_PATH_PATTERN = /^\/watch\/(\d+)/
+export const NETFLIX_TTML_URL_PATTERN =
+  /^https:\/\/[^/]+\.oca\.nflxvideo\.net\/\?([ovet]=[^=&]+&?){4}$/
+export const NETFLIX_PLAYER_SELECTOR = "[data-uia='player']"
+export const NETFLIX_CONTROLS_SELECTOR = "[data-uia='controls-standard']"
+export const NETFLIX_CONTROLS_GROUP_SELECTOR =
+  "div:has(> div > [data-uia='control-audio-subtitle'])"
+export const NETFLIX_NATIVE_SUBTITLES_SELECTOR = ".player-timedtext"
+export const NETFLIX_SUBTITLES_REQUEST_TYPE = "READ_FROG_NETFLIX_SUBTITLES"
+export const NETFLIX_SUBTITLES_RESPONSE_TYPE = "READ_FROG_NETFLIX_SUBTITLES_DONE"
+// The page script answers "state" and "restore" within this, inside POST_MESSAGE_TIMEOUT_MS.
+export const NETFLIX_PAGE_WAIT_TIMEOUT_MS = 5000
+// The page script answers "load" within this one deadline, which covers waiting for the player
+// and then for its subtitle file.
+export const NETFLIX_LOAD_TIMEOUT_MS = 10_000
+// Outwaits the page's load deadline, with room for its last poll even in a throttled background
+// tab, so a slow load reports how it ended instead of timing out.
+export const NETFLIX_LOAD_POST_MESSAGE_TIMEOUT_MS = NETFLIX_LOAD_TIMEOUT_MS + 2000
+export const NETFLIX_PAGE_POLL_INTERVAL_MS = 100
+export const NETFLIX_WATCH_POLL_INTERVAL_MS = 1000
+export const NETFLIX_TRANSLATE_BUTTON_ZOOM = 1.4
+
 // YouTube player wait constants
 export const MAX_PLAYER_WAIT_ATTEMPTS = 50
 export const PLAYER_WAIT_INTERVAL_MS = 100
+// AdGuard's YouTube rules make a cold load fetch the player response again, which can take
+// well over the wait above; a player already on the video gets this much longer.
+export const MAX_PLAYER_RESPONSE_WAIT_ATTEMPTS = 300
 export const MAX_STATE_WAIT_ATTEMPTS = 20
 export const STATE_WAIT_INTERVAL_MS = 300
 export const MAX_FETCH_RETRIES = 5
@@ -77,6 +123,7 @@ export const DEFAULT_SUBTITLE_COLOR = "#FFFFFF"
 export const DEFAULT_DISPLAY_MODE = "bilingual" as const
 export const DEFAULT_TRANSLATION_POSITION = "above" as const
 export const DEFAULT_CONTROLS_HEIGHT = 60
+export const MAX_CONTROLS_HEIGHT_RATIO = 0.25
 export const DEFAULT_SUBTITLE_POSITION = { percent: 10, anchor: "bottom" } as const
 // Mnemonic for "captions", and it echoes YouTube's own `C` key without taking it over.
 export const DEFAULT_SUBTITLES_TOGGLE_SHORTCUT_KEY = "Alt+C"

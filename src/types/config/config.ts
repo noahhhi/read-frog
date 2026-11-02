@@ -1,5 +1,10 @@
 import { langCodeISO6393Schema, langLevel } from "@read-frog/definitions"
 import { z } from "zod"
+import {
+  BUILT_IN_ACTION_IDS,
+  BUILT_IN_ACTION_KEYS,
+  isBuiltInActionId,
+} from "@/utils/constants/custom-action"
 import { FEATURE_KEYS, FEATURE_PROVIDER_DEFS } from "@/utils/constants/feature-providers"
 import {
   MAX_SELECTION_OVERLAY_OPACITY,
@@ -11,16 +16,19 @@ import {
   doesProviderSupportsCapability,
   getProviderIdsForCapability,
 } from "@/utils/providers/provider-registry"
+import { normalizeSelectionToolbarLists } from "@/utils/selection-toolbar-order"
 import { floatingButtonSchema } from "./floating-button"
+import { glossaryConfigSchema } from "./glossary"
 import { languageDetectionConfigSchema } from "./language-detection"
 import { providersConfigSchema } from "./provider"
 import {
   selectionToolbarBuiltInActionsSchema,
   selectionToolbarCustomActionsSchema,
 } from "./selection-toolbar"
+import { shortcutSchema } from "./shortcut"
 import { siteRulesConfigSchema } from "./site-rules"
 import { videoSubtitlesSchema } from "./subtitles"
-import { pageTranslationShortcutSchema, translateConfigSchema } from "./translate"
+import { translateConfigSchema } from "./translate"
 import { ttsConfigSchema } from "./tts"
 // Language schema
 const languageSchema = z.object({
@@ -32,12 +40,32 @@ const languageSchema = z.object({
 const selectionToolbarFeatureSchema = z.object({
   enabled: z.boolean(),
   providerId: z.string().nonempty(),
-  shortcut: pageTranslationShortcutSchema,
+  shortcut: shortcutSchema,
 })
 
 const selectionToolbarSpeakFeatureSchema = z.object({
   enabled: z.boolean(),
+  // Missing means the default key (see getSpeakShortcut); empty means the user
+  // cleared it. Optional rather than defaulted: a UI context that parses a
+  // pre-v110 config and writes it back must not store the default, or the v110
+  // migration could no longer tell it from a key the user chose, and would not
+  // check it against the user's other shortcuts.
+  shortcut: shortcutSchema.optional(),
 })
+
+// The toolbar's leftmost slot: annotates the selection with its meaning
+// between the lines. A fixed place like the "more" menu's, not an item in
+// `order`. `.default()` lets a config stored before v116 parse in UI contexts
+// that load ahead of the background migration.
+const selectionToolbarAnnotationSchema = z
+  .object({
+    enabled: z.boolean(),
+    // Missing means the default key (see getAnnotationShortcut); empty means
+    // the user cleared it. Optional rather than defaulted, for the reason
+    // given on the speak feature's key.
+    shortcut: shortcutSchema.optional(),
+  })
+  .default(() => ({ enabled: true }))
 
 // Text selection toolbar schema
 const selectionToolbarSchema = z
@@ -49,8 +77,18 @@ const selectionToolbarSchema = z
       translate: selectionToolbarFeatureSchema,
       speak: selectionToolbarSpeakFeatureSchema,
     }),
+    annotation: selectionToolbarAnnotationSchema,
     builtInActions: selectionToolbarBuiltInActionsSchema,
     customActions: selectionToolbarCustomActionsSchema,
+    // The order of every toolbar item (translate, speak and the actions), by
+    // id. Kept in step with the items by the transform below. `.default([])`
+    // lets a config stored before this field parse in UI contexts that load
+    // ahead of the background migration.
+    order: z.array(z.string().min(1)).default([]),
+    // Ids of the items kept off the toolbar itself, in its "more" menu only.
+    // Every other item is pinned. Independent of an item's enabled switch,
+    // so a pin survives the item being turned off and on.
+    unpinned: z.array(z.string().min(1)).default([]),
     noteSuggestion: z.object({
       enabled: z.boolean(),
       actionId: z.string().nonempty(),
@@ -60,7 +98,7 @@ const selectionToolbarSchema = z
   .superRefine((selectionToolbar, ctx) => {
     const actionId = selectionToolbar.noteSuggestion.actionId
     const actionExists =
-      actionId === "default-dictionary" ||
+      isBuiltInActionId(actionId) ||
       selectionToolbar.customActions.some((action) => action.id === actionId)
 
     if (!actionExists) {
@@ -71,6 +109,9 @@ const selectionToolbarSchema = z
       })
     }
   })
+  // Every parse brings `order` and `unpinned` in step with the actions there
+  // are, so adding or deleting an action never has to update them itself.
+  .transform((selectionToolbar) => normalizeSelectionToolbarLists(selectionToolbar))
 
 // side content schema
 const sideContentSchema = z.object({
@@ -83,9 +124,21 @@ const sideContentSchema = z.object({
 // and writing that over the user's settings.
 const translationHubSchema = z
   .object({
-    shortcut: pageTranslationShortcutSchema,
+    shortcut: shortcutSchema,
+    selectedProviderIds: z.array(z.string().min(1)).nullable().default(null),
+    sourceCode: langCodeISO6393Schema.or(z.literal("auto")).nullable().default(null),
+    targetCode: langCodeISO6393Schema.nullable().default(null),
+    // A missing ID in a pre-migration config must stay unset until v102 copies
+    // the page prompt; another UI context may write this config first.
+    promptId: z.string().min(1).nullable().default(null),
   })
-  .default({ shortcut: DEFAULT_TRANSLATION_HUB_SHORTCUT_KEY })
+  .default({
+    shortcut: DEFAULT_TRANSLATION_HUB_SHORTCUT_KEY,
+    selectedProviderIds: null,
+    sourceCode: null,
+    targetCode: null,
+    promptId: null,
+  })
 
 // beta experience schema
 const betaExperienceSchema = z.object({
@@ -131,7 +184,7 @@ const siteControlSchema = z.object({
 // parse successfully, avoiding the destructive fallback-to-DEFAULT_CONFIG path in
 // `writeConfigAtom` / `initializeConfig` during the upgrade window.
 const uiLanguageSchema = z
-  .enum(["auto", "en", "es", "ja", "ko", "ru", "tr", "vi", "zh-CN", "zh-TW"])
+  .enum(["auto", "az", "en", "es", "ja", "ko", "ru", "tr", "vi", "zh-CN", "zh-TW"])
   .default("auto")
 export type UiLanguage = z.infer<typeof uiLanguageSchema>
 
@@ -154,6 +207,7 @@ export const configSchema = z
     siteRules: siteRulesConfigSchema,
     uiLanguage: uiLanguageSchema,
     translationHub: translationHubSchema,
+    glossary: glossaryConfigSchema,
   })
   .superRefine((data, ctx) => {
     for (const featureKey of FEATURE_KEYS) {
@@ -207,10 +261,13 @@ export const configSchema = z
     }
 
     const actionProviderEntries = [
-      {
-        providerId: data.selectionToolbar.builtInActions.dictionary.providerId,
-        path: ["selectionToolbar", "builtInActions", "dictionary", "providerId"] as const,
-      },
+      ...BUILT_IN_ACTION_IDS.map((id) => {
+        const key = BUILT_IN_ACTION_KEYS[id]
+        return {
+          providerId: data.selectionToolbar.builtInActions[key].providerId,
+          path: ["selectionToolbar", "builtInActions", key, "providerId"] as const,
+        }
+      }),
       ...data.selectionToolbar.customActions.map((action, index) => ({
         providerId: action.providerId,
         path: ["selectionToolbar", "customActions", index, "providerId"] as const,

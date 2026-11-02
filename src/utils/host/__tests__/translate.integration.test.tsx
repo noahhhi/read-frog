@@ -78,17 +78,17 @@ function bilingualConfigWithSiteRule(rule: Omit<SiteRule, "id" | "matches">): Co
   return config
 }
 
-function setHost(host: string) {
+function setHost(host: string, pathname = "/some/path") {
   Object.defineProperty(window, "location", {
-    value: new URL(`https://${host}/some/path`),
+    value: new URL(`https://${host}${pathname}`),
     writable: true,
     configurable: true,
   })
 }
 
-async function withHost(host: string, callback: () => Promise<void>) {
+async function withHost(host: string, callback: () => Promise<void>, pathname = "/some/path") {
   const originalLocation = window.location
-  setHost(host)
+  setHost(host, pathname)
   try {
     await callback()
   } finally {
@@ -186,6 +186,64 @@ describe("translate", () => {
       expect(wrapper?.querySelector(`.${TRANSLATION_ERROR_CONTAINER_CLASS}`)).toBeTruthy()
     })
   }
+
+  describe("LaTeXML SVG text boxes", () => {
+    // Shapes reported on arxiv.org/html/2609.32423 and /2601.21557v2.
+    // The latter puts its title, authors and abstract inside the same SVG.
+    const fixtures = [
+      {
+        paper: "2609.32423",
+        content:
+          '<span class="ltx_para"><span class="ltx_p" style="display:block">Abstract</span><span class="ltx_p" style="display:block"><span>The harness surrounding a language model is a central determinant of agent performance.</span></span></span>',
+      },
+      {
+        paper: "2601.21557v2",
+        content:
+          '<span class="ltx_para"><span class="ltx_p" style="display:block">Meta Context Engineering via Agentic Skill Evolution</span><span class="ltx_p" style="display:block">Haoran Ye<sup>1</sup></span></span><span class="ltx_para"><span class="ltx_p" style="display:block"><b>Abstract:</b><span>The operational efficacy of large language models relies heavily on their inference-time context.</span></span></span>',
+      },
+    ]
+
+    it.each(
+      fixtures.flatMap((fixture) =>
+        (["bilingual", "translationOnly"] as const).map((mode) => ({ ...fixture, mode })),
+      ),
+    )("translates $paper in $mode mode and restores the SVG nodes", async ({ content, mode }) => {
+      await withHost(
+        "arxiv.org",
+        async () => {
+          const host = document.createElement("div")
+          host.innerHTML = `<span class="ltx_inline-block"><svg class="ltx_picture" width="550" height="357" viewBox="0 0 550 357"><g fill="#F3F8FA"><path d="M0 0H550V357H0Z"></path></g><g><foreignObject width="500" height="320" style="font-size:10pt"><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content"><span class="ltx_minipage">${content}<span class="ltx_p" style="display:block"><a href="https://example.com/code">Code repository</a></span></span></span></span></foreignObject></g></svg></span>`
+          document.body.append(host)
+          const svg = host.querySelector("svg")!
+          const source = host.querySelector(".ltx_foreignobject_content")!
+          const link = host.querySelector("a")!
+          const original = svg.textContent
+          const onClick = vi.fn<(event: MouseEvent) => void>((event) => event.preventDefault())
+          link.addEventListener("click", onClick)
+
+          await removeOrShowPageTranslation(mode)
+
+          expect(host.querySelector("svg")).toBeNull()
+          expect(host.querySelector("[data-read-frog-latexml-text-box]")?.contains(source)).toBe(
+            true,
+          )
+          expect(translateTextForPage).toHaveBeenCalled()
+          expect(host.textContent).toContain(MOCK_TRANSLATION)
+          expect(host.textContent?.includes("Abstract")).toBe(mode === "bilingual")
+
+          removeAllTranslatedWrapperNodes()
+          expect(host.querySelector("svg")).toBe(svg)
+          expect(svg.querySelector(".ltx_foreignobject_content")).toBe(source)
+          expect(svg.textContent).toBe(original)
+          expect(svg.querySelector("a")).toBe(link)
+          link.dispatchEvent(new MouseEvent("click", { cancelable: true }))
+          expect(onClick).toHaveBeenCalledOnce()
+          host.remove()
+        },
+        "/html/test-paper",
+      )
+    })
+  })
 
   describe("translateTextForPage stub", () => {
     it("translateTextForPage should be mocked", async () => {
@@ -712,9 +770,11 @@ describe("translate", () => {
           await removeOrShowPageTranslation("translationOnly", true)
 
           expect(translateTextForPage).toHaveBeenCalledTimes(1)
-          expect(translateTextForPage).toHaveBeenCalledWith(sourceText, "html", {
-            forceRetranslation: false,
-          })
+          expect(translateTextForPage).toHaveBeenCalledWith(
+            sourceText,
+            "html",
+            DEFAULT_PAGE_TRANSLATION_OPTIONS,
+          )
           expectInPlaceTranslation(sourceSpan, translatedText)
           expect(sourceSpan.firstChild).toBe(sourceTextNode)
           expect([...tweet.children]).toEqual([sourceSpan, ...emojiImages])
@@ -2626,6 +2686,227 @@ describe("translate", () => {
     })
   })
 
+  describe("arXiv inline code", () => {
+    // LaTeXML markup from https://arxiv.org/html/2609.26891, including the
+    // language class shared by inline identifiers and standalone listings.
+    const inlineCode = (id: string, text = "invoke") =>
+      `<span id="${id}" class="ltx_text ltx_lst_emph ltx_lst_language_Python ltx_lstlisting ltx_font_typewriter" style="--ltx-fg-color:#FF00A6;">${text}</span>`
+
+    beforeEach(() => {
+      vi.mocked(translateTextForPage).mockReset().mockResolvedValue(MOCK_TRANSLATION)
+    })
+
+    afterEach(() => {
+      vi.mocked(translateTextForPage).mockReset().mockResolvedValue(MOCK_TRANSLATION)
+    })
+
+    it.each(["bilingual", "translationOnly"] as const)(
+      "does not translate a code-only paragraph in %s mode",
+      async (mode) => {
+        await withHost(
+          "arxiv.org",
+          async () => {
+            render(<p data-testid="test-node" />)
+            const node = screen.getByTestId("test-node")
+            node.innerHTML = `(${inlineCode("code-only")})`
+            const sourceCode = node.querySelector("span")!
+
+            await removeOrShowPageTranslation(mode, true)
+
+            expect(translateTextForPage).not.toHaveBeenCalled()
+            expect(node.querySelector(`.${CONTENT_WRAPPER_CLASS}`)).toBeNull()
+            expect(node.querySelector("span")).toBe(sourceCode)
+            expect(node.textContent).toBe("(invoke)")
+          },
+          "/html/2609.26891",
+        )
+      },
+    )
+
+    it.each(["bilingual", "translationOnly"] as const)(
+      "applies the same prose length filter without counting code in %s mode",
+      async (mode) => {
+        await withHost(
+          "arxiv.org",
+          async () => {
+            const config = structuredClone(DEFAULT_CONFIG)
+            config.pageTranslation.mode = mode
+            config.pageTranslation.page.minCharactersPerNode = 20
+            config.pageTranslation.page.minWordsPerNode = 0
+            render(<p data-testid="test-node" />)
+            const node = screen.getByTestId("test-node")
+            node.innerHTML = `Call ${inlineCode("long-code", "very_long_identifier".repeat(4))}`
+            const sourceCode = node.querySelector("span")!
+
+            await removeOrShowPageTranslation(mode, true, config)
+
+            expect(translateTextForPage).not.toHaveBeenCalled()
+            expect(node.querySelector(`.${CONTENT_WRAPPER_CLASS}`)).toBeNull()
+            expect(node.querySelector("span")).toBe(sourceCode)
+          },
+          "/html/2609.26891",
+        )
+      },
+    )
+
+    it.each(["arxiv.org", "ar5iv.labs.arxiv.org"])(
+      "preserves repeated inline identifiers in bilingual translations on %s",
+      async (host) => {
+        await withHost(
+          host,
+          async () => {
+            vi.mocked(translateTextForPage).mockResolvedValue(
+              "核心原语 {{0}} 使用 {{1}} 增强的语言。{{2}} 保留历史。",
+            )
+            render(<p data-testid="test-node" />)
+            const node = screen.getByTestId("test-node")
+            node.innerHTML = `The core primitive ${inlineCode("S1.p2.1.2")} uses an ${inlineCode("S1.p2.1.3")}-augmented language. ${inlineCode("S1.p2.1.5")} preserves history.`
+            const sourceCode = [...node.querySelectorAll("span")]
+
+            await removeOrShowPageTranslation("bilingual", true)
+
+            expect(translateTextForPage).toHaveBeenCalledExactlyOnceWith(
+              "The core primitive {{0}} uses an {{1}}-augmented language. {{2}} preserves history.",
+              "plain",
+              DEFAULT_PAGE_TRANSLATION_OPTIONS,
+            )
+            const wrapper = expectTranslationWrapper(node, "bilingual")!
+            const clones = [...wrapper.querySelectorAll<HTMLElement>(`.${INLINE_ATOM_CLASS}`)]
+            expect(clones).toHaveLength(3)
+            expect(wrapper.textContent).toBe(
+              "核心原语 invoke 使用 invoke 增强的语言。invoke 保留历史。",
+            )
+            expect(
+              clones.every(
+                (clone) =>
+                  clone.textContent === "invoke" &&
+                  clone.classList.contains("ltx_font_typewriter") &&
+                  clone.style.getPropertyValue("--ltx-fg-color") === "#FF00A6" &&
+                  !clone.hasAttribute("id"),
+              ),
+            ).toBe(true)
+            expect(sourceCode.every((code) => code.isConnected && code.hasAttribute("id"))).toBe(
+              true,
+            )
+
+            await removeOrShowPageTranslation("bilingual", true)
+
+            expect(node.querySelector(`.${CONTENT_WRAPPER_CLASS}`)).toBeNull()
+            const restoredCode = [...node.querySelectorAll("span")]
+            expect(restoredCode).toHaveLength(sourceCode.length)
+            restoredCode.forEach((code, index) => expect(code).toBe(sourceCode[index]))
+          },
+          "/html/2609.26891",
+        )
+      },
+    )
+
+    it("keeps every identifier when the provider drops or merges placeholders", async () => {
+      await withHost(
+        "arxiv.org",
+        async () => {
+          const names = Array.from({ length: 10 }, (_, index) => `hook${index}`)
+          vi.mocked(translateTextForPage).mockResolvedValue(
+            "运行时将 {{0}}、{{1}}、{{2}}{{3}}、{{4}}、{{5}}、{{6}}、{{8}} 和 {{9}} 作为钩子公开。",
+          )
+          render(<p data-testid="test-node" />)
+          const node = screen.getByTestId("test-node")
+          node.innerHTML = `The runtime exposes ${names.map((name, index) => inlineCode(`S2.p1.1.${index}`, name)).join(", ")} as hooks.`
+
+          await removeOrShowPageTranslation("bilingual", true)
+
+          expect(translateTextForPage).toHaveBeenCalledExactlyOnceWith(
+            `The runtime exposes ${names.map((_, index) => `{{${index}}}`).join(", ")} as hooks.`,
+            "plain",
+            DEFAULT_PAGE_TRANSLATION_OPTIONS,
+          )
+          const wrapper = expectTranslationWrapper(node, "bilingual")!
+          expect(wrapper.querySelectorAll(`.${INLINE_ATOM_CLASS}`)).toHaveLength(10)
+          // Merged tokens still render separately; the dropped {{7}} is
+          // appended after the sentence instead of being lost.
+          expect(wrapper.textContent).toBe(
+            "运行时将 hook0、hook1、hook2hook3、hook4、hook5、hook6、hook8 和 hook9 作为钩子公开。 hook7",
+          )
+        },
+        "/html/2609.26891",
+      )
+    })
+
+    it("marks inline code translate=no in the translationOnly HTML request", async () => {
+      await withHost(
+        "arxiv.org",
+        async () => {
+          // Behaves like an HTML translator: every text node is translated
+          // unless it sits inside a translate="no" element.
+          const translations: Record<string, string> = {
+            "On top of the ": "在 ",
+            invoke: "调用",
+            " primitive, JAZ provides utilities.": " 原语之上，JAZ 提供实用工具。",
+          }
+          vi.mocked(translateTextForPage).mockImplementation(async (html) => {
+            const template = document.createElement("template")
+            template.innerHTML = html
+            const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT)
+            for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+              if (text.parentElement?.closest("[translate='no']")) continue
+              text.textContent = translations[text.textContent ?? ""] ?? text.textContent
+            }
+            return template.innerHTML
+          })
+          render(<p data-testid="test-node" />)
+          const node = screen.getByTestId("test-node")
+          node.innerHTML = `On top of the ${inlineCode("S1.p3.1.1")} primitive, JAZ provides utilities.`
+          const originalHtml = node.innerHTML
+          const sourceCode = node.querySelector("span")!
+          const sourceCodeHtml = sourceCode.outerHTML
+
+          await removeOrShowPageTranslation("translationOnly", true)
+
+          expect(translateTextForPage).toHaveBeenCalledOnce()
+          const [request, textFormat] = vi.mocked(translateTextForPage).mock.calls[0]!
+          expect(textFormat).toBe("html")
+          expect(request).toMatch(/<span class="notranslate" translate="no"[^>]*>invoke<\/span>/)
+          expect(node.textContent).toBe("在 invoke 原语之上，JAZ 提供实用工具。")
+          expect(node.querySelector("span")).toBe(sourceCode)
+          expect(sourceCode.outerHTML).toBe(sourceCodeHtml)
+
+          await removeOrShowPageTranslation("translationOnly", true)
+
+          expect(node.innerHTML).toBe(originalHtml)
+        },
+        "/html/2609.26891",
+      )
+    })
+
+    it.each(["div", "span"])(
+      "keeps a standalone %s code listing beside prose out of the translation",
+      async (tag) => {
+        await withHost(
+          "arxiv.org",
+          async () => {
+            render(<div data-testid="test-node" />)
+            const node = screen.getByTestId("test-node")
+            node.innerHTML = `Call it like this: <${tag} class="ltx_listing ltx_lst_language_Python ltx_lstlisting"><span class="ltx_lst_line">${inlineCode("listing-code")}(task="Use subagents to find papers.")</span></${tag}> and wait.`
+            const listing = node.querySelector(".ltx_listing")!
+            const listingHtml = listing.outerHTML
+
+            await removeOrShowPageTranslation("bilingual", true)
+
+            const requests = vi
+              .mocked(translateTextForPage)
+              .mock.calls.map(([text]) => text)
+              .join("\n")
+            expect(requests).toContain("Call it like this:")
+            expect(requests).not.toMatch(/\{\{\d+\}\}|invoke|subagents/)
+            expect(node.querySelector(`.${INLINE_ATOM_CLASS}`)).toBeNull()
+            expect(listing.outerHTML).toBe(listingHtml)
+          },
+          "/html/2609.26891",
+        )
+      },
+    )
+  })
+
   describe("translationOnly HTML attribute placeholders", () => {
     beforeEach(() => {
       vi.mocked(translateTextForPage).mockReset().mockResolvedValue(MOCK_TRANSLATION)
@@ -3144,6 +3425,35 @@ describe("translate", () => {
         expect(viewer.querySelector(`.${CONTENT_WRAPPER_CLASS}`)).toBeFalsy()
         expect(viewer.textContent).toBe(translations.join("\n\n"))
         expect(viewer).toHaveAttribute(TRANSLATION_ONLY_ATTRIBUTE)
+      })
+
+      it("translation only mode: keeps the single line breaks inside each paragraph", async () => {
+        // A text/plain guide's banner (`===` / `---[VERSION HISTORY]---` / `===`)
+        // is one paragraph of single-newline lines. The request has to say the
+        // newlines matter, or Google returns the banner as one wrapped line.
+        const lineTranslations = paragraphs.map((paragraph, index) =>
+          paragraph
+            .split("\n")
+            .map((_, line) => `【第${index + 1}段第${line + 1}行】`)
+            .join("\n"),
+        )
+        vi.mocked(translateTextForPage).mockImplementation(async (text) => {
+          const index = paragraphs.indexOf(text)
+          if (index === -1) throw new Error(`Unexpected paragraph: ${JSON.stringify(text)}`)
+          return lineTranslations[index]!
+        })
+        const viewer = renderPlainTextViewer()
+
+        await removeOrShowPageTranslation("translationOnly", true)
+
+        paragraphs.forEach((paragraph) => {
+          expect(translateTextForPage).toHaveBeenCalledWith(
+            paragraph,
+            "html",
+            PRESERVE_LINE_BREAKS_TRANSLATION_OPTIONS,
+          )
+        })
+        expect(viewer.textContent).toBe(lineTranslations.join("\n\n"))
       })
 
       it("translation only mode: restores the original single text node on toggle", async () => {
@@ -4193,12 +4503,18 @@ describe("translate", () => {
         await removeOrShowPageTranslation("translationOnly", true)
 
         expect(translateTextForPage).toHaveBeenCalledTimes(2)
-        expect(translateTextForPage).toHaveBeenNthCalledWith(1, MOCK_ORIGINAL_TEXT, "html", {
-          forceRetranslation: false,
-        })
-        expect(translateTextForPage).toHaveBeenNthCalledWith(2, MOCK_ORIGINAL_TEXT, "html", {
-          forceRetranslation: false,
-        })
+        expect(translateTextForPage).toHaveBeenNthCalledWith(
+          1,
+          MOCK_ORIGINAL_TEXT,
+          "html",
+          DEFAULT_PAGE_TRANSLATION_OPTIONS,
+        )
+        expect(translateTextForPage).toHaveBeenNthCalledWith(
+          2,
+          MOCK_ORIGINAL_TEXT,
+          "html",
+          DEFAULT_PAGE_TRANSLATION_OPTIONS,
+        )
       })
     })
   })

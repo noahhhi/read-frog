@@ -47,14 +47,15 @@ export function PatternsTable({
 
   // This is the only place a pattern is typed in, so it is where the outcome is reported.
   // A rejected pattern keeps its text in the field so it can be corrected rather than
-  // retyped.
+  // retyped. An empty input is the one rejection worth staying quiet about — the user
+  // pressed Enter on nothing.
   const handleAddPattern = () => {
     const result = onAddPattern(inputValue)
-    if (result === "duplicate") {
-      toastManager.add({ type: "error", title: i18n.t("options.patterns.duplicate") })
+    if (result === "empty") return
+    if (result !== "added") {
+      toastManager.add({ type: "error", title: i18n.t(`options.patterns.${result}`) })
       return
     }
-    if (result === "empty") return
 
     setInputValue("")
   }
@@ -66,7 +67,7 @@ export function PatternsTable({
   }
 
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div className={cn("flex flex-col gap-3", className)}>
       <div className="flex items-center gap-2">
         <Input
           placeholder={placeholderText}
@@ -83,9 +84,13 @@ export function PatternsTable({
           Header and rows are separate tables so only the rows sit in a scroll box: keeping
           them in one table would put the header inside it too, which drags the scrollbar
           track up alongside the header. Both rows carry ACTION_COLUMN so the action cell
-          lines up across the split. */}
+          lines up across the split.
+
+          Boxed and 12px below the input, like the glossary's term table: without an edge
+          of its own, the header's tint was the list's only boundary and read as hanging
+          off the input. */}
       {patterns.length > 0 && (
-        <div>
+        <div className="overflow-hidden rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow className={ACTION_COLUMN}>
@@ -97,8 +102,8 @@ export function PatternsTable({
           <div className={cn("max-h-42 overflow-y-auto", rowsClassName)}>
             <Table>
               <TableBody>
-                {patterns.map((pattern, index) => (
-                  <TableRow key={pattern} index={index} className={ACTION_COLUMN}>
+                {patterns.map((pattern) => (
+                  <TableRow key={pattern} className={ACTION_COLUMN}>
                     <TableCell>{pattern}</TableCell>
                     <TableCell className="text-right">
                       <Button

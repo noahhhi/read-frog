@@ -11,6 +11,11 @@ const alertVariants = cva(
         default: "bg-card text-card-foreground",
         destructive:
           "border-destructive bg-destructive/5 text-destructive *:data-[slot=alert-description]:text-card-foreground *:[svg]:text-current",
+        // `warning` rather than `destructive`: these are "this will not do what
+        // you expect" states, not failures. Built like `destructive`, so the
+        // description reads as body text on the tint.
+        warning:
+          "border-warning bg-warning/5 text-warning *:data-[slot=alert-description]:text-card-foreground *:[svg]:text-current",
       },
     },
     defaultVariants: {

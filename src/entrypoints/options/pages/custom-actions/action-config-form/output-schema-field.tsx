@@ -3,6 +3,8 @@ import type {
   SelectionToolbarCustomActionOutputField,
 } from "@/types/config/selection-toolbar"
 import { Icon } from "@iconify/react"
+import { LAYOUT_RESERVED_FIELD_NAMES } from "@read-frog/layout-engine/contract"
+import { renameLayoutFieldRefs } from "@read-frog/layout-engine/editor"
 import { useForm } from "@tanstack/react-form"
 import { useEffect, useState } from "react"
 import { fieldContext as FieldContext } from "@/components/form/form-context"
@@ -23,7 +25,6 @@ import {
 } from "@/components/ui/base-ui/alert-dialog"
 import { Badge } from "@/components/ui/base-ui/badge"
 import { Button } from "@/components/ui/base-ui/button"
-import { Checkbox } from "@/components/ui/base-ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -39,16 +40,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/base-ui/select"
+import { toastManager } from "@/components/ui/base-ui/toast"
 import { selectionToolbarCustomActionOutputTypeSchema } from "@/types/config/selection-toolbar"
 import {
   createOutputSchemaField,
+  getModelOutputFields,
   getNextOutputFieldName,
   getOutputSchemaFieldNameError,
   getSelectionToolbarCustomActionTokenCellText,
+  isSelectionOutputField,
   normalizeOutputSchemaFieldName,
   SELECTION_TOOLBAR_CUSTOM_ACTION_TOKENS,
 } from "@/utils/constants/custom-action"
 import { i18n } from "@/utils/i18n"
+import { CUSTOM_ACTION_LAYOUT_HOST } from "@/utils/layout-host/host"
 import { sanitizeCustomActionNotebaseConnection } from "@/utils/notebase/connection"
 import { withForm } from "./form"
 
@@ -58,7 +63,6 @@ type CustomActionFormKey =
   | "fieldType"
   | "fieldDescription"
   | "fieldDescriptionPlaceholder"
-  | "fieldSpeaking"
   | "editFieldDialog.save"
   | "deleteFieldDialog.title"
   | "deleteFieldDialog.description"
@@ -69,6 +73,8 @@ type CustomActionFormKey =
   | "addField"
   | "addFieldDialog.title"
   | "editFieldDialog.title"
+  | "selectionField"
+  | "selectionFieldDescription"
 
 function t(key: CustomActionFormKey) {
   return i18n.t(`options.selectionToolbar.customActions.form.${key}`)
@@ -107,6 +113,11 @@ function FieldDialog({
     }
     if (errorType === "duplicate") {
       return i18n.t("options.selectionToolbar.customActions.errors.duplicateFieldKey")
+    }
+    // Layouts cannot reach a field named after `ctx` or the loop drop. UI-only on
+    // purpose: the config schema must keep accepting fields saved before layouts.
+    if (isReservedLayoutName(normalizeOutputSchemaFieldName(value))) {
+      return i18n.t("options.selectionToolbar.customActions.form.layout.reservedName")
     }
     return undefined
   }
@@ -150,60 +161,50 @@ function FieldDialog({
                 </FieldContext>
               )}
             </form.Field>
-            <form.Field name="type">
-              {(typeField) => (
-                <FieldContext value={typeField}>
-                  <SelectField
-                    label={t("fieldType")}
-                    items={selectionToolbarCustomActionOutputTypeSchema.options.map((type) => ({
-                      value: type,
-                      label: i18n.t(`dataTypes.${type}`),
-                    }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {selectionToolbarCustomActionOutputTypeSchema.options.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {i18n.t(`dataTypes.${type}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </SelectField>
-                </FieldContext>
-              )}
-            </form.Field>
-            <form.Field name="description">
-              {(descriptionField) => (
-                <FieldContext value={descriptionField}>
-                  <QuickInsertableTextareaField
-                    label={t("fieldDescription")}
-                    placeholder={t("fieldDescriptionPlaceholder")}
-                    className="min-h-20"
-                    insertCells={customActionInsertCells}
-                  />
-                </FieldContext>
-              )}
-            </form.Field>
-            <form.Field name="speaking">
-              {(speakingField) => {
-                const checkboxId = `custom-action-field-speaking-${outputField.id}`
-
-                return (
-                  <Field orientation="horizontal" className="items-center">
-                    <Checkbox
-                      id={checkboxId}
-                      checked={speakingField.state.value}
-                      onCheckedChange={(checked) => speakingField.handleChange(checked)}
+            {/* A selection field is always text, and the model never reads its
+                description: only its name is the user's to set. */}
+            {!isSelectionOutputField(outputField) && (
+              <form.Field name="type">
+                {(typeField) => (
+                  <FieldContext value={typeField}>
+                    <SelectField
+                      label={t("fieldType")}
+                      items={selectionToolbarCustomActionOutputTypeSchema.options.map((type) => ({
+                        value: type,
+                        label: i18n.t(`dataTypes.${type}`),
+                      }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {selectionToolbarCustomActionOutputTypeSchema.options.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {i18n.t(`dataTypes.${type}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </SelectField>
+                  </FieldContext>
+                )}
+              </form.Field>
+            )}
+            {!isSelectionOutputField(outputField) && (
+              <form.Field name="description">
+                {(descriptionField) => (
+                  <FieldContext value={descriptionField}>
+                    <QuickInsertableTextareaField
+                      label={t("fieldDescription")}
+                      placeholder={t("fieldDescriptionPlaceholder")}
+                      className="min-h-20"
+                      insertCells={customActionInsertCells}
                     />
-                    <FieldLabel htmlFor={checkboxId}>{t("fieldSpeaking")}</FieldLabel>
-                  </Field>
-                )
-              }}
-            </form.Field>
+                  </FieldContext>
+                )}
+              </form.Field>
+            )}
           </FieldGroup>
           <DialogFooter>
             <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
@@ -218,6 +219,12 @@ function FieldDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+const RESERVED_LAYOUT_NAMES = new Set<string>(LAYOUT_RESERVED_FIELD_NAMES)
+
+function isReservedLayoutName(name: string) {
+  return RESERVED_LAYOUT_NAMES.has(name)
 }
 
 function DeleteFieldDialog({
@@ -260,12 +267,25 @@ function OutputSchemaRow({
     <div className="flex items-center gap-2 rounded-lg border bg-card p-2">
       {leading}
       <span className="shrink-0 text-sm font-medium">{outputField.name}</span>
-      <Badge variant="secondary" className="shrink-0">
-        {i18n.t(`dataTypes.${outputField.type}`)}
-      </Badge>
-      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-        {outputField.description || "—"}
-      </span>
+      {isSelectionOutputField(outputField) ? (
+        <>
+          <Badge variant="secondary" className="shrink-0">
+            {t("selectionField")}
+          </Badge>
+          <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+            {t("selectionFieldDescription")}
+          </span>
+        </>
+      ) : (
+        <>
+          <Badge variant="secondary" className="shrink-0">
+            {i18n.t(`dataTypes.${outputField.type}`)}
+          </Badge>
+          <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+            {outputField.description || "—"}
+          </span>
+        </>
+      )}
       {actions}
     </div>
   )
@@ -305,7 +325,8 @@ export const OutputSchemaField = withForm({
         validators={{
           onChange: ({ value }) => {
             const outputSchema = Array.isArray(value) ? value : []
-            if (outputSchema.length === 0) {
+            // The model has to write something: a selection field alone asks it nothing.
+            if (getModelOutputFields(outputSchema).length === 0) {
               return i18n.t("options.selectionToolbar.customActions.errors.outputSchemaRequired")
             }
 
@@ -382,7 +403,10 @@ export const OutputSchemaField = withForm({
                           className="size-7"
                           onClick={() => setDeletingFieldId(outputField.id)}
                           onPointerDown={(e) => e.stopPropagation()}
-                          disabled={outputSchema.length === 1}
+                          disabled={
+                            !isSelectionOutputField(outputField) &&
+                            getModelOutputFields(outputSchema).length === 1
+                          }
                         >
                           <Icon icon="tabler:trash" className="size-3.5" />
                         </Button>
@@ -420,10 +444,38 @@ export const OutputSchemaField = withForm({
                     if (!open) setEditingField(null)
                   }}
                   onSave={(updated) => {
+                    const previous = outputSchema.find((item) => item.id === updated.id)
                     const nextOutputSchema = outputSchema.map((item) =>
                       item.id === updated.id ? updated : item,
                     )
-                    autosave.edit(() => field.handleChange(nextOutputSchema), { immediate: true })
+                    let renameSkipped = false
+                    autosave.edit(
+                      () => {
+                        // Move the layout's references in the same write as the rename, so no
+                        // saved state has a layout pointing at a field that no longer exists.
+                        const layout = form.state.values.layout
+                        if (previous && previous.name !== updated.name && layout?.trim()) {
+                          const renamed = renameLayoutFieldRefs(
+                            layout,
+                            [{ from: previous.name, to: updated.name }],
+                            CUSTOM_ACTION_LAYOUT_HOST,
+                          )
+                          if (renamed.changed) form.setFieldValue("layout", renamed.source)
+                          renameSkipped = renamed.skipped !== undefined
+                        }
+                        field.handleChange(nextOutputSchema)
+                      },
+                      { immediate: true },
+                    )
+                    if (renameSkipped && previous) {
+                      toastManager.add({
+                        type: "warning",
+                        title: i18n.t(
+                          "options.selectionToolbar.customActions.form.layout.renameSkipped",
+                          [previous.name],
+                        ),
+                      })
+                    }
                     setEditingField(null)
                   }}
                 />

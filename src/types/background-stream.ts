@@ -1,9 +1,11 @@
 import type { HostedAiFeature } from "@read-frog/api-contract"
 import type { JSONValue, StreamTextOnErrorCallback } from "ai"
 import type { Browser } from "#imports"
+import type { AnalyticsFailureReason } from "@/types/analytics"
 import type { AISDKReasoning, LLMProviderConfig } from "@/types/config/provider"
 import type { SelectionToolbarCustomActionOutputType } from "@/types/config/selection-toolbar"
 import type { BuiltInAiProviderId, HostedAiModelTier } from "@/utils/constants/provider-ids"
+import type { ErrorAction } from "@/utils/error-action"
 import type { NoteSuggestionEnvelope } from "@/utils/note-suggestion/types"
 
 interface BaseBackgroundStreamSerializablePayload {
@@ -111,6 +113,10 @@ export interface BackgroundStreamResponseMap {
 
 export interface StreamPortErrorPayload {
   message: string
+  /** What the user can do about it, when the background knows. */
+  action?: ErrorAction
+  /** Classified where the original error still exists, for failure analytics. */
+  reason?: AnalyticsFailureReason
 }
 
 export type StreamPortResponse<T = string> =

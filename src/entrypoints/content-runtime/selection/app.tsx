@@ -1,0 +1,62 @@
+import { useAtomValue } from "jotai"
+import { useEffect } from "react"
+import { ToastProvider } from "@/components/ui/base-ui/toast"
+import { configFieldsAtomMap } from "@/utils/atoms/config"
+import {
+  SELECTION_CONTENT_OVERLAY_LAYERS,
+  SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE,
+} from "@/utils/constants/selection-overlay-layers"
+import { AnnotationModePill } from "./annotation/mode-pill"
+import { AnnotationProvider } from "./annotation/provider"
+import { useInputTranslation } from "./input-translation"
+import { SelectionToolbar } from "./selection-toolbar"
+import { SelectionCustomActionProvider } from "./selection-toolbar/custom-action-button/provider"
+import { SelectionSpeechProvider } from "./selection-toolbar/speak-button"
+import { SelectionTranslationProvider } from "./selection-toolbar/translate-button/provider"
+import { useContextMenuReadAloud } from "./use-context-menu-read-aloud"
+
+export default function App({
+  uiContainer,
+  portalContainer,
+}: {
+  uiContainer: HTMLElement
+  portalContainer: ShadowRoot
+}) {
+  useInputTranslation()
+  useContextMenuReadAloud()
+  const opacity = useAtomValue(configFieldsAtomMap.selectionToolbar).opacity / 100
+
+  useEffect(() => {
+    uiContainer.style.setProperty("--rf-selection-opacity", String(opacity))
+
+    return () => {
+      uiContainer.style.removeProperty("--rf-selection-opacity")
+    }
+  }, [opacity, uiContainer])
+
+  // The content runtime's one corner-toast surface. Its parts share one module
+  // instance, so one `toastManager`, and each ToastProvider would render every
+  // toast: page translation and the floating button raise theirs here too.
+  // This UI runs in the top frame with every part and in each iframe that gets
+  // the toolbar, and a click on a toast in its overlay root keeps the toolbar open.
+  return (
+    <ToastProvider
+      portalProps={{ container: portalContainer }}
+      viewportProps={{
+        className: SELECTION_CONTENT_OVERLAY_LAYERS.selectionOverlay,
+        ...{ [SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE]: "" },
+      }}
+    >
+      <SelectionTranslationProvider>
+        <SelectionCustomActionProvider>
+          <SelectionSpeechProvider>
+            <AnnotationProvider>
+              <SelectionToolbar />
+              <AnnotationModePill />
+            </AnnotationProvider>
+          </SelectionSpeechProvider>
+        </SelectionCustomActionProvider>
+      </SelectionTranslationProvider>
+    </ToastProvider>
+  )
+}

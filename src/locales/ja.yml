@@ -1,12 +1,15 @@
-name: 読書カエル
-extName: 読書カエル - 翻訳して学ぶ
-extDescription: 読書カエルは、あらゆるウェブサイトから言語を深く学ぶために設計されたオープンソースのブラウザ拡張機能です。
+name: Read Frog
+extName: "Read Frog - AI対訳翻訳・二重字幕・単語帳"
+extDescription: "ウェブページと YouTube・Netflix・X の動画字幕を AI で対訳翻訳。知らない単語は保存して、フラッシュカードで復習できます。"
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 account:
   login: ログイン
   webApp: ウェブアプリ
   logout: ログアウト
   logoutError: ログアウトに失敗しました。もう一度お試しください。
+  grantAccess: アクセスを許可
+  grantAccessHint: readfrog.app へのアクセスが必要です
+  grantAccessError: アクセスの許可に失敗しました。もう一度お試しください。
 dataTypes:
   string: テキスト
   number: 数値
@@ -51,9 +54,14 @@ popup:
   discord:
     tooltip: Discordに参加して開発者とつながり、新機能を先行体験しましょう
   blog:
-    notification: 読書カエルの最新情報
+    notification: Read Frog の最新情報
   aiSmartContext: AI スマートコンテキスト
   aiSmartContextDescription: ウェブページのコンテキストを使用して翻訳品質を向上させます。LLM翻訳プロバイダーが必要です。
+  storeReview:
+    title: Read Frog はいかがですか？
+    description: ストアでのレビューが、他の読者に見つけてもらう助けになります。
+    action: レビューを書く
+    dismiss: 閉じる
   more:
     title: その他
     help: ヘルプ
@@ -103,9 +111,11 @@ options:
     toggle: サイドバーを切り替え
     settings: 設定
     features: 機能
+    translation: 翻訳
     product: 製品
   tools:
     translationHub: 翻訳ハブ
+    pdfTranslation: PDF 翻訳
   product:
     roadmap: ロードマップ
   helpAndCommunity:
@@ -148,6 +158,8 @@ options:
       resetsAt: "$1 にリセット"
       daily: 日次クォータ
       weekly: 週間クォータ
+      oneTime: ボーナスクォータ
+      expiresAt: "$1 に期限切れ"
       features:
         pageTranslation: ページ翻訳
         customAction: カスタム AI アクション
@@ -157,13 +169,13 @@ options:
         inputTranslation: 入力翻訳
         languageDetection: 言語検出
     sponsorCta: 高速で高コスパのAIを入手
-    sponsorCtaJalapenoCloud: GLM 5.2 を 50% オフで入手
+    sponsorCtaJalapenoCloud: GLM 5.3 を 50% オフで入手
     setApiKeyWarning:
       message: API キーは $1 ページで設定してください
     badges:
       featureCount: $1 件の機能
       sponsor: スポンサー
-      sponsorJalapenoCloud: $$2 無料
+      sponsorJalapenoCloud: $$1 無料
     dialog:
       title: 新しいプロバイダーを追加
       groups:
@@ -242,7 +254,7 @@ options:
         customChatComplete: カスタム Chat Complete
         customResponses: カスタム Responses
       attribution:
-        builtInAi: Read Frog がホストする標準モデル。Ultra 以外のユーザーはカスタム AI アクションでのみ利用でき、Ultra ユーザーはより多くの機能で利用できます。
+        builtInAi: Read Frog がホストする標準モデル。Pro と Ultra のユーザーは週間クォータの範囲ですべての機能で利用でき、無料プランではカスタム AI アクションでのみ利用できます。
         builtInAiAdvance: Read Frog がホストする高性能モデルで、Ultra メンバー専用です。ページ翻訳やカスタム AI アクションなど、すべての組み込み AI 機能で利用でき、週間クォータを共有します。標準モデルよりクォータの消費が速くなります。
       description:
         openai: GPT-4oなどのモデルを提供
@@ -271,7 +283,6 @@ options:
         cerebras: 高速翻訳とテキスト分析に最適な超高速AI推論
         replicate: 専門的な翻訳タスクのための多様なオープンソースモデルへのアクセス
         perplexity: 文脈的翻訳と読解支援のためのリアルタイム知識強化AI
-        vercel: ウェブコンテンツの翻訳と分析に最適化されたAIモデル
         volcengine: ByteDanceのクラウドAIプラットフォーム、Doubaoモデルを提供
         minimax: MiniMax AIプラットフォーム、先進的なMiniMax-M2モデルを提供
         alibaba: アリババクラウドのQwenモデルシリーズ、高度な推論と多言語機能を備える
@@ -290,6 +301,7 @@ options:
     featureProviders:
       title: 機能プロバイダー
       description: 各機能に使用するプロバイダーを選択
+      chooseProvider: プロバイダーを選択
       features:
         pageTranslation: ページ翻訳
         selectionTranslation: 選択ツールバー翻訳
@@ -298,7 +310,7 @@ options:
         noteSuggestion: ノートの提案
       descriptions:
         pageTranslation: ページ全体を対訳または置き換えで翻訳します。
-        selectionTranslation: 選択ツールバーから、選択したテキストを翻訳します。
+        selectionTranslation: "選択したテキストを翻訳します。単語注釈の意味にも使われます。"
         inputTranslation: 入力欄に書いた文章を、送信する前に翻訳します。
         videoSubtitles: 動画プレーヤーに表示される字幕を翻訳します。
         noteSuggestion: 選択テキストを翻訳した後、Notebase に保存する価値のある単語を提案します。
@@ -324,6 +336,8 @@ options:
       llmProviderNotConfigured: $1の LLM プロバイダー未選択
   patterns:
     duplicate: このパターンは既にリストにあります
+    gluedWildcard: "「*」はアドレスの一区切り全体を表す必要があります。例: *.example.com、example.*"
+    unsupported: このアドレスは照合できません。ポート指定と、http・https 以外のスキームには対応していません。
   preference:
     title: 環境設定
     pageDescription: Read Frog の外観、動作する範囲、設定の同期とバックアップ方法を指定します。
@@ -364,16 +378,17 @@ options:
       title: 設定
       googleDrive:
         title: Google Driveクラウド同期
-        description: リモートが新しい場合はダウンロード、ローカルが新しい場合はアップロード
+        description: リモートが新しい場合はダウンロード、ローカルが新しい場合はアップロード。用語集は専用のファイルで同期され、まるごと置き換えではなく用語ごとに統合されます。
         sync: Google Driveに同期
         syncing: 同期中...
         syncSuccess:
           uploaded: ローカル設定をクラウドにアップロードしました
           downloaded: リモート設定を適用しました
-          sameChanges: ローカルとリモートの変更が一致、同期しました
-          noChange: 既に同期済みです
-          unresolved: 競合を解決し、ローカルとクラウドに同期しました
-        syncError: 同期に失敗しました。もう一度お試しください
+          sameChanges: 両側の設定変更が同じため、同期しました
+          noChange: 設定は既に同期済みです
+          unresolved: 設定の競合を解決して同期しました
+        syncError: 設定の同期に失敗しました。もう一度お試しください
+        accountChangedError: ダイアログを開いている間にログイン中の Google アカウントが変わりました。何もアップロードしていません。もう一度同期してください。
         metadataCorrupted: 同期メタデータが破損しています。リモート設定を適用しました
         lastSyncTime: 最終同期時間
         logout: ログアウト
@@ -409,14 +424,50 @@ options:
             title: マージされた設定に検証エラーがあります
             description: 以下の差異を調整して修正してください：
           moreErrors: ...他 $1 件のエラー
+        glossary:
+          thisDevice: このデバイス
+          cloud: クラウド
+          deleted: 削除済み
+          disabled: 無効
+          upToDate: 用語集は同期済みです
+          uploaded: 用語集をクラウドにアップロードしました
+          merged: "用語集を同期しました: 追加 $1、更新 $2、削除 $3"
+          undo: 元に戻す
+          undone: 用語集を同期前の状態に戻しました
+          undoUnavailable: この操作は取り消せなくなりました — その後に用語集が変更されています。
+          retry: 同期中に用語集が変更されました。もう一度実行してください。
+          accountChangedRetry: ダイアログを開いている間にログイン中の Google アカウントが変わりました。何もアップロードしていません。もう一度同期してください。
+          busy: 別のタブが用語集を同期しています。
+          malformed: クラウドの用語集ファイルを読み取れなかったため、何も変更していません。
+          versionTooNew: その用語集ファイルは新しいバージョンの Read Frog で書かれています。先に拡張機能を更新してください。
+          duplicateFiles: クラウドに用語集ファイルが複数あります。何も変更していません。余分なファイルを削除してください。
+          capExceeded: "統合すると用語集の上限を $1 件超えるため、何も変更していません。"
+          failed: 用語集の同期に失敗しました
+          review:
+            title: この用語集の同期を確認
+            description: 2 つのコピーが食い違う箇所について、どちらを残すか選んでください。
+            firstSync: "このデバイスでの初回同期：クラウドから $1 件、アップロード $2 件。"
+            accountChanged: "現在 $1 でログインしています。このデバイスが前回同期したアカウントとは別のものです。このデバイスの用語集データ $2 件がこのアカウントにアップロードされます。このアカウントの用語集だけにしたい場合は、キャンセルして、このデバイスの用語集を削除してから、もう一度同期してください。"
+            destructive: "この同期は、このデバイスの用語集データ $2 件のうち $1 件を削除します。"
+            moreConflicts: "ほかに $1 件の相違は一覧にありません。いずれもマージの判断に従います。"
+            confirm: 同期
+            cancel: キャンセル
       manualSync:
         title: 手動設定同期
-        description: 手動で設定をインポート・エクスポート
+        description: 設定を手動でインポート・エクスポートします。用語集も一緒に含まれます
         import: インポート
         export: エクスポート
         importSuccess: 設定のインポートが完了しました
         exportSuccess: 設定のエクスポートが完了しました
+        exportGlossaryFailed: 設定はエクスポートされましたが、用語集を読み取れなかったためファイルに含まれていません。
         importError: インポートに失敗しました
+        glossaryImported: "用語 $1 件をインポートし、これまでの用語集を置き換えました。"
+        glossaryUndo: 元に戻す
+        glossaryUndone: 用語集をインポート前の状態に戻しました
+        glossaryUndoUnavailable: この操作は取り消せなくなりました — その後に用語集が変更されています。
+        glossaryMalformed: そのファイルの用語集を読み取れませんでした。何も変更していません。
+        glossaryVersionTooNew: そのファイルの用語集は新しいバージョンの Read Frog で書かれています。先に拡張機能を更新してください。
+        glossaryCapExceeded: "そのファイルの用語集データは上限 $2 件を $1 件超えています。何も変更していません。"
         exportOptions:
           title: エクスポートオプションを選択
           description: エクスポートする設定にAPIキーを含めるかどうかを選択してください。APIキーを含めると機密情報が漏洩する可能性があるため、安全な環境でのみ使用することをお勧めします。
@@ -455,13 +506,13 @@ options:
           confirm: 削除
       reset:
         title: 設定をリセット
-        description: すべての設定をデフォルト値にリセットします。
+        description: すべての設定を既定値に戻します。用語集は影響を受けません
         dialog:
           title: 設定をリセット
           trigger: 設定をリセット
           confirm: 確認
           cancel: キャンセル
-          description: この操作は、すべての設定をデフォルト値にリセットします。ご確認ください。
+          description: この操作はすべてのカスタム設定を消去し、既定値に戻します。用語集は保持されます — 削除する場合は用語集ページから行ってください。確認してください。
     userExperience:
       title: ユーザー体験
       beta:
@@ -473,7 +524,7 @@ options:
         description: バグの特定や UI レイアウトの改善などを通じて Read Frog をより良くします
   shortcuts:
     title: ショートカット
-    pageDescription: 読みながら翻訳を実行するキーを設定します。
+    pageDescription: 読みながら翻訳・読み上げ・AI アクションを実行するキーを設定します。
     setShortcut: ショートカットを設定
     pageTranslation:
       title: ページ翻訳
@@ -488,11 +539,25 @@ options:
       title: 字幕翻訳
       description: 動画の翻訳字幕をオンまたはオフにします。
     nodeTranslation:
-      title: 段落翻訳
+      title: ホバー翻訳
       description: 段落にホバーまたは長押しすると、その段落だけ翻訳します。
+      customDescription: 段落にホバーしたままこのキーを押すと、その段落を翻訳します。
     translationHub:
       title: 翻訳ハブ
       description: 翻訳ハブを新しいタブで開きます。
+    selectionSpeak:
+      title: "選択範囲の読み上げ"
+      description: "選択したテキストを読み上げます。もう一度押すと停止します。"
+    selectionAnnotation:
+      title: "注釈"
+      description: "選択したテキストに下線を引き、行間に意味を表示します。"
+    actions:
+      title: "AI アクション"
+      description: "選択したテキストに AI アクションを実行します。カスタムアクションには最初はショートカットがないので、ここで設定してください。"
+    turnedOff: "この機能はオフのため、オンに戻すまでこのキーは何もしません。"
+    turnOn: "オンにする"
+    clash: "「$1」と同じキーです。どちらかを変更してください。"
+    taken: "$1 はすでに「$2」で使われています。"
   overlayTools:
     title: オーバーレイツール
   inputTranslation:
@@ -558,6 +623,14 @@ options:
     enable:
       title: 選択ツールバーを有効化
       description: ウェブページでテキストを選択したときにツールバーを表示し、すばやく翻訳・読み上げ・AIアクションを実行します
+    annotation:
+      title: "単語注釈"
+      enable:
+        title: "有効にする"
+        description: "選択した単語やフレーズに下線を引き、行間に意味を書き込みます"
+      provider:
+        title: "プロバイダー"
+        description: "意味を生成します。「翻訳」と同じ設定です"
     actions:
       title: アクション
       translate:
@@ -595,18 +668,33 @@ options:
       providerUnavailable: 選択したプロバイダーは利用できません
     customActions:
       title: カスタム AI アクション
-      pageDescription: 独自のプロンプトを作成し、選択ツールバーから選択したテキストに対して実行します。
+      pageDescription: 独自のプロンプトを作成し、選択ツールバーから選択したテキストに対して実行します。生成結果のデータ、スタイル、インタラクションはすべてカスタマイズできます。
       description: 選択テキスト向けに独自の構造化 AI アクションを追加
       configTitle: アクション設定
+      introVideo:
+        trigger: "動画を見る"
+        title: "30 秒でわかるカスタム AI アクション"
       builtIn: 組み込み
       add: AI アクションを追加
       edit: AI アクションを編集
       empty: カスタム AI アクションはまだありません
       noEnabledLlmProvider: カスタム AI アクションを作成する前に、少なくとも1つのLLMプロバイダーを有効化してください
+      tabs:
+        config: 設定
+        notebase: Notebase
+        hasErrors: エラーがあります
+        connected: 接続済み
+        needsAttention: 要確認
       form:
         name: 名前
         customize: カスタマイズ
         customizeTooltip: 組み込みアクションのプロンプトは変更できません。このボタンをクリックして編集可能なコピーを作成し、プロンプトを変更します。
+        aiConfigHelper:
+          trigger: "AI に設定を手伝ってもらう"
+          title: "AI に設定を手伝ってもらう"
+          description: "下のプロンプトをコピーして、普段使っている AI アシスタント（ChatGPT、Claude、DeepSeek、Kimi など）に貼り付けてください。まずやりたいことを質問し、その後で各項目に何を入力すればよいかを教えてくれます。プロンプトにはこのアクションの現在の設定が含まれますが、API キーは含まれません。"
+          copy: "プロンプトをコピー"
+          copyFailed: "プロンプトをコピーできませんでした。もう一度お試しください。"
         icon: アイコン
         iconField:
           chooseAriaLabel: アイコンを選択
@@ -628,12 +716,13 @@ options:
         fieldType: フィールド型
         fieldDescription: 説明
         fieldDescriptionPlaceholder: このフィールドに含めるべき内容を説明してください...
-        fieldSpeaking: 読み上げを有効にする
         actions: 操作
         cancel: キャンセル
         save: 保存
         defaultFieldName: 結果
         fieldNamePlaceholder: フィールド名
+        selectionField: "選択したテキスト"
+        selectionFieldDescription: "選択したテキストをそのまま保存します。AI は書きません。"
         autoFieldPrefix: フィールド
         addFieldDialog:
           title: 出力フィールドを追加
@@ -645,6 +734,69 @@ options:
           description: この出力フィールドは削除されます。
           confirm: 削除
           cancel: キャンセル
+        layout:
+          title: レイアウト
+          description: ポップアップでの結果の表示方法です。HTML と Liquid で記述し、回答のストリーミングに合わせてフィールドが埋まります。
+          reset: デフォルトに戻す
+          resetFieldList: フィールド一覧
+          resetDictionary: 辞書カード
+          resetSentenceAnalysis: 文分析カード
+          resetImproveWriting: "文章添削カード"
+          resetConfirmTitle: このレイアウトを置き換えますか？
+          resetConfirmDescription: エディターの内容が置き換えられます。あとからエディターで元に戻すこともできます。
+          resetConfirm: 置き換える
+          edit: 編集
+          preview: プレビュー
+          width: 幅
+          themeLight: ライト
+          themeDark: ダーク
+          replay: 再生
+          sampleData: サンプルデータ
+          sampleDataHint: このプレビューでのみ使われ、保存されません。
+          sampleDataSavedHint: このプレビューでのみ使われ、このアクションと一緒に保存されます。
+          sampleDataReset: サンプルをリセット
+          sampleSelection: 選択したテキスト
+          sampleTargetLanguage: 翻訳先の言語
+          insertField: フィールド
+          insertSpeak: 読み上げボタン
+          insertCondition: 値があるとき
+          insertContext: コンテキスト
+          insertLoop: すべてのフィールド
+          syntaxHelp: 構文
+          builtInHint: 組み込みアクションのレイアウトは編集できません。「カスタマイズ」でコピーを作成して編集してください。
+          viewSource: ソースを表示
+          emptyNotice: レイアウトが空のため、ポップアップにはデフォルトのフィールド一覧が表示されます。
+          fallbackBanner: このレイアウトは表示できないため、デフォルトのレイアウトを使用しています。$1
+          sanitized: 安全のため削除されました：$1
+          unusedFields: このレイアウトにないフィールド：
+          tooLong: レイアウトは最大 $1 文字です。
+          renameSkipped: レイアウトはまだ「$1」を参照しています。手動で更新してください。
+          reservedName: 「ctx」と「forloop」はレイアウトの予約名です。別の名前を選んでください。
+          help:
+            output: フィールドの値を表示します。値に含まれる HTML はエスケープされます。
+            condition: フィールドに値があるときだけ中身を表示します。
+            loop: すべてのフィールドについて順に繰り返します。f.name、f.value、f.type が使えます。
+            speak: data-speak を付けた要素は、回答の完了後にその値（空なら要素自身のテキスト）を読み上げます。
+            speakLang: data-speak-lang で読み上げる言語（es、en-US など）を指定すると、その言語の音声で読み上げます。指定しない場合は言語を自動判定しますが、単語だけだとよく外れます。
+            speakAutoplay: data-speak-autoplay を付けた要素は、回答の完了後に自動で読み上げます。再生されるのは最初の 1 つだけです。
+            status: 状態ごとにスタイルを設定します。ホストの data-status は streaming、done、error のいずれかです。
+            filters: newline_to_br は改行を保持します（最後に置いてください）。lines はテキストを行のリストに分けます。
+            styles: <style> ブロックの CSS はこの結果の中だけに適用されます。--rf-* の色はライト／ダークテーマに追従します。
+          lint:
+            parseError: Liquid の構文エラー：$1
+            unknownField: 「$1」という名前のフィールドはありません。
+            unknownContextKey: ctx に「$1」はありません。使用可能：$2。
+            fieldShadowedByLocal: このレイアウトで「$1」に値を代入しているため、同じ名前のフィールドが隠れます。
+            liquidInStyle: <style> 内では Liquid は実行されず、そのままのテキストとして残ります。
+            styleInConditional: <style> ブロックは「$1」タグの中にあっても常に適用されます。
+            cssImport: "@import は削除されます。レイアウトから外部のスタイルは読み込めません。"
+            cssFontFace: "@font-face は削除されます。端末にあるフォントを使ってください。"
+            unquotedAttributeOutput: この属性値を引用符で囲んでください。囲まないと値が属性の外にはみ出すおそれがあります。
+            filterIgnored: 「$1」タグではフィルターは無視されます。先にフィルター後の値を代入してください。
+            newlineToBrNotLast: newline_to_br は出力の最後のフィルターとしてのみ機能します。
+            tooLong: このレイアウトは $1 文字を超えているため保存できません。
+            fieldNotShown: 「$1」はこのレイアウトに表示されません。
+            reservedFieldName: フィールド名「$1」はレイアウトの予約名です。フィールドの名前を変更してください。
         notebase:
           title: Notebase 接続
           description: このアクションの構造化された結果をリモート Notebase に保存します。
@@ -676,16 +828,16 @@ options:
           schemaErrorDescription: 少し待ってからもう一度更新してください。
           schemaLoading: notebase スキーマを読み込み中...
           mappingsLabel: フィールドマッピング
-          mappingsEmpty: まだマッピングはありません。フィールドを保存する準備ができたら追加してください。
-          addMappingAction: マッピングを追加
-          removeMappingAction: マッピングを削除
           localFieldLabel: アクションフィールド
-          localFieldPlaceholder: アクションフィールドを選択
           remoteFieldLabel: Notebase フィールド
-          remoteFieldPlaceholder: notebase フィールドを選択
           columnUnavailableOption: 削除済み
           invalidMappingsTitle: 一部のマッピングに対応が必要です
           invalidMappingsDescription: 無効なマッピングは保持されます。Notebase に保存する前に修正してください。
+          noFieldSavedTitle: "この Notebase に保存されるフィールドがありません"
+          noFieldSavedDescription: "ノートを保存するには、少なくとも 1 つのフィールドに Notebase フィールドを選んでください。"
+          mappingSummary: "保存 $1 · 保存しない $2 · 未決定 $3"
+          skipFieldOption: "保存しない"
+          undecidedFieldPlaceholder: "Notebase フィールドを選ぶか、保存しない"
           mappingMissingLocal: マッピングされたアクションフィールドは存在しなくなりました。
           mappingMissingRemote: マッピングされた notebase フィールドは存在しなくなりました。
           mappingMissingSchema: このマッピングを検証するには、notebase スキーマを更新してください。
@@ -695,6 +847,7 @@ options:
           paragraphs: 選択範囲と交差する段落内容。空行で連結され、カスタム AI アクションに送信する際は先頭 2000 文字に切り詰められます
           targetLanguage: ユーザーのターゲット言語
           webTitle: ウェブページのタイトル
+          webUrl: 現在のページの完全な URL
           webContent: 現在のページから抽出されたウェブページ本文（先頭 2000 文字に切り詰め）
         delete: 削除
         deleteDialog:
@@ -702,6 +855,194 @@ options:
           description: この操作は元に戻せません。
           confirm: 削除
           cancel: キャンセル
+      templates:
+        dictionary:
+          name: "辞書"
+          description: "意味・発音・段落の翻訳付きで単語を調べる"
+          systemPrompt: |-
+            あなたは語学学習者のための辞書アシスタントです。
+
+            ## 目的
+            語句とその前後の段落をもとに、指定された出力オブジェクトに合った簡潔な辞書項目を作成してください。
+
+            ## ルール
+            1. 与えられた段落に最も合う意味に焦点を当ててください。
+            2. 見出し語は基本形（原形）に正規化してください。
+            3. 意味は正確で、学習者にわかりやすく書いてください。
+            4. 例文には、与えられた段落のうち選択された語句を含む完全な一文だけを抜き出してください。前後の文は含めないでください。
+            5. 例文の翻訳では、抜き出した例文だけを翻訳してください。
+            6. 発音はその語の言語の標準的な表記を使ってください（例：英語は IPA、中国語はピンイン、日本語はローマ字）。
+            7. 品詞は英語で書いてください（noun、verb、adjective など）。
+            8. 難易度は CEFR レベル（A1、A2、B1、B2、C1、C2）のいずれかにしてください。
+            9. わからない項目は、推測せずに空文字列を返してください。
+            10. 原文の形が必要な場合を除き、すべてのテキスト項目は {{targetLanguage}} で答えてください。
+            11. 例文中の語形は、選択された語句が例文のどこにあるかを示します。これは {"text": ...} 要素からなるコンパクトな JSON 配列を含む文字列で、各要素は例文を一字一句そのまま引用します。例：[{"text":"blossoms"}]。例文で語句が複数の部分に分かれている場合（例：「Er ruft seine Mutter an」の「anrufen」）は、部分ごとに順番に 1 要素ずつ書いてください：[{"text":"ruft"},{"text":"an"}]。内側の引用符は正しくエスケープしてください。
+            12. 覚え方のコツは、良い先生がこの語のために教えるように、選択された語そのもの（訳語ではなく、元の言語の語）を覚える手助けをします。コツは最大 3 個、1 行に 1 つずつ、最も役立つものから書いてください。本当に役立つコツだけを書き、弱いコツを足すより少ないほうがよいです。本当に役立つものがなければ、無理に作らず空文字列を返してください。各行は 1 つの技法だけを扱い、技法名とコロンで始めます。技法名も内容も {{targetLanguage}} で書いてください。まず語の成り立ちから考え、ほかに本当に役立つものを加えます：
+               - 語の構成：意味を持つ部分（語根、接頭辞、接尾辞、または複合語を構成する語）と、それらがどう組み合わさって意味になるか。
+               - 漢字：漢字で書かれる語（中国語、日本語の漢語、漢字由来の韓国語）なら、各漢字の意味、または漢字の部品。
+               - 語源：語の由来、または学習者が知っていそうな関連語（同源語、外来語、別の言語で同じ漢字を使う語）。
+               - 類義語／対義語：類義語とその違い、または対義語。
+               - 紛らわしい語：形や音が似ている語と、その見分け方。
+               - コロケーション：その語がよく使われる決まった言い回しで、まとめて覚える価値のあるもの。
+               当てはまらない技法は飛ばし、当てはまらないと書くだけの行は作らないでください。どのコツも「意味」に書いていないことを教えてください。意味を言い換えて繰り返したり、例文をなぞったり、語形変化を説明したりしないでください。確かな事実だけを書き、語源・語根・漢字の部品をでっち上げないでください。異説のある語源や俗説の語源話は、「楽しく覚えるための話」という形でも書かないでください（sincere は「蝋なし」から来た語ではなく、posh も頭字語ではありません）。部分や漢字に分けて説明するのは、それらが本当に意味を作っている場合だけにしてください。「犹豫」「葡萄」のように字に分けても意味にならない語には、別の技法を使ってください。どの言語の語呂合わせも、語を無関係な語に分解する覚え方も使わないでください。
+
+            ## 例
+
+            ### 例 1
+            入力：選択テキスト="blossoms"、段落="Spring arrives quietly in the park. The ephemeral beauty of cherry blossoms reminds us to cherish each moment. Families and friends gather beneath the trees."、ターゲット言語=中国語
+
+            出力：
+            - 見出し語：blossom
+            - 発音：/ˈblɒs.əm/
+            - 品詞：noun
+            - 例文：The ephemeral beauty of cherry blossoms reminds us to cherish each moment.
+            - 例文中の語形：[{"text":"blossoms"}]
+            - 意味：花；花朵（尤指果树的花）
+            - 例文の翻訳：樱花短暂的美丽提醒我们珍惜每一刻。
+            - 覚え方のコツ：
+              词源：和 bloom（开花）同源，bl- 开头的 bloom、blossom 都和开花有关
+              近义词：bloom 多指花开的状态，blossom 常指果树（樱桃、苹果）的花
+            - 難易度：B2
+
+            ### 例 2
+            入力：選択テキスト="感動"、段落="この映画はつまらないと思ったけど、最後は感動した。"、ターゲット言語=英語
+
+            出力：
+            - 見出し語：感動
+            - 発音：kandou
+            - 品詞：noun
+            - 例文：この映画はつまらないと思ったけど、最後は感動した。
+            - 例文中の語形：[{"text":"感動"}]
+            - 意味：Being deeply moved; emotional touch
+            - 例文の翻訳：I thought this movie was boring, but the ending was moving.
+            - 覚え方のコツ：
+              Characters: 感 (feel) + 動 (move): your feelings are moved.
+              Collocation: 感動する = to be moved; 感動的 = moving, touching.
+            - 難易度：B1
+          prompt: |-
+            ## 入力
+            選択テキスト：{{selection}}
+            段落：{{paragraphs}}
+            ターゲット言語：{{targetLanguage}}
+          fieldTerm: "見出し語"
+          fieldTermDescription: "選択された語句の基本形（原形）。"
+          fieldPhonetic: "発音"
+          fieldPhoneticDescription: "その語の言語の標準的な発音表記（例：英語は IPA、中国語はピンイン、日本語はローマ字）。"
+          fieldPartOfSpeech: "品詞"
+          fieldPartOfSpeechDescription: "文法上の品詞（例：noun、verb、adjective）。"
+          fieldSentence: "例文"
+          fieldSentenceDescription: "上の段落のうち、選択された語句を含む完全な一文。前後の文は含めないでください。"
+          fieldSentenceTerm: "例文中の語形"
+          fieldSentenceTermDescription: '選択された語句の例文中の位置：文字列として直列化された JSON 配列で、語句の部分ごとに {"text": 文字列} を 1 要素とし、それぞれ例文をそのまま引用します（例：[{"text":"blossoms"}]）。'
+          fieldDefinition: "意味"
+          fieldDefinitionDescription: "文脈に合った意味の簡潔な定義を 1 つ。"
+          fieldSentenceTranslation: "例文の翻訳"
+          fieldSentenceTranslationDescription: "例文だけの翻訳。"
+          fieldMemoryTips: "覚え方のコツ"
+          fieldMemoryTipsDescription: "語を覚えるためのコツ：最大 3 個、1 行に 1 つずつ、それぞれ技法名とコロンで始める（例：語の構成：…）。本当に役立つものがなければ空文字列。"
+          fieldDifficulty: "難易度"
+          fieldDifficultyDescription: "推定 CEFR 難易度：A1、A2、B1、B2、C1、C2。"
+        sentenceAnalysis:
+          name: "構文解析"
+          description: "長い文を先生のように書き込み、骨組み・節・つまずきやすい所をひと目で示す"
+          fieldSentence: "文"
+          fieldAnnotations: "注釈"
+          fieldTranslation: "訳文"
+          roles:
+            subject: "主語"
+            predicate: "述語動詞"
+            object: "目的語"
+            complement: "補語"
+            attributive: "形容詞的修飾"
+            adverbial: "副詞的修飾"
+            appositive: "同格"
+            connector: "接続詞"
+          clauses:
+            subject: "主語節"
+            object: "目的語節"
+            complement: "補語節"
+            attributive: "関係詞節"
+            adverbial: "副詞節"
+            appositive: "同格節"
+            clause: "節"
+          adverbialClauses:
+            time: "時の副詞節"
+            place: "場所の副詞節"
+            cause: "理由の副詞節"
+            condition: "条件の副詞節"
+            concession: "譲歩の副詞節"
+            purpose: "目的の副詞節"
+            result: "結果の副詞節"
+            manner: "様態の副詞節"
+            comparison: "比較の副詞節"
+          forms:
+            infinitive: "不定詞"
+            gerund: "動名詞"
+            presentParticiple: "現在分詞"
+            pastParticiple: "過去分詞"
+          senses:
+            time: "時"
+            place: "場所"
+            cause: "理由"
+            condition: "条件"
+            concession: "譲歩"
+            purpose: "目的"
+            result: "結果"
+            manner: "様態"
+            comparison: "比較"
+          obstacles:
+            inversion: "倒置"
+            fronting: "前置"
+            ellipsis: "省略"
+            passive: "受動態"
+            subjunctive: "仮定法"
+            parenthesis: "挿入"
+            dummyIt: "形式主語"
+            postponedSubject: "真主語"
+            cleft: "強調構文"
+            comparison: "比較"
+            negation: "否定"
+            split: "分離"
+            idiom: "慣用句"
+          restoreLabel: "本来の語順："
+          hardLabel: "難所"
+          trunkLabel: "骨組みだけ"
+          slashesLabel: "スラッシュ"
+        improveWriting:
+          name: "文章添削"
+          description: "先生のように添削：誤りや不自然な表現に印をつけ、場面に合った文に直します"
+          fieldOriginal: "修正前"
+          fieldSetting: "場面"
+          fieldAnnotations: "添削"
+          fieldImproved: "修正後"
+          fieldSummary: "総評"
+          types:
+            spelling: "表記"
+            grammar: "文法"
+            punctuation: "句読点"
+            wordChoice: "語彙"
+            logic: "論理"
+            unnatural: "不自然"
+            register: "文体"
+            clarity: "明確さ"
+            good: "好表現"
+          tiers:
+            error: "誤り"
+            awkward: "要改善"
+            good: "好表現"
+          hideFixesLabel: "答えを隠す"
+          hiddenHintLabel: "まず自分で直してみましょう。"
+          showImprovedLabel: "修正後を表示"
+          improvedLabel: "修正後"
+          copyLabel: "コピー"
+          unchangedLabel: "直すところはありません"
+          removeLabel: "削除"
+        blank:
+          prompt: |-
+            ## 入力
+            選択テキスト：{{selection}}
+            段落：{{paragraphs}}
+            ターゲット言語：{{targetLanguage}}
       errors:
         nameRequired: 名前は必須です
         duplicateName: '重複するアクション名 "$1"'
@@ -710,6 +1051,115 @@ options:
         outputSchemaRequired: 少なくとも1つの出力フィールドを追加してください
         fieldKeyRequired: フィールド名は必須です
         duplicateFieldKey: フィールド名は一意である必要があります
+  advanced:
+    title: 詳細設定
+    pageDescription: 普段は使わない、強力な設定です。
+    glossary:
+      title: 用語集
+      pageDescription: 大切な言葉に決まった訳語を指定し、それぞれの用語集を適用する範囲を選びます。
+      untitled: 無題の用語集
+      noGlossaries: 用語集がまだありません。
+      enable:
+        title: 有効にする
+        description: 一致した用語を LLM に渡し、指定どおりの訳語で出力させます。用語集はプロンプトに含めて送られるため、LLM プロバイダーで動作する機能にのみ適用されます。
+      library:
+        title: 登録した用語集
+        description: 用語集ごとに用語とウェブサイトの一覧を個別に持てるため、仕事用の用語がほかのすべてのページにまで付いて回ることはありません。
+        button: 用語集を追加
+        capReached: "用語集は最大 $1 件までです。"
+        termUsage: "すべての用語集を合わせて、$2 件中 $1 件の用語を使用しています。"
+      summary:
+        terms: "$1 件の用語"
+        termsOne: 1 件の用語
+        allSites: すべてのウェブサイト
+        sites: "$1 件のウェブサイト"
+        sitesOne: 1 件のウェブサイト
+      editor:
+        docsLink: 使い方は?
+        sections:
+          terms: 用語
+          maintenance: バックアップと削除
+        details:
+          title: 名前と説明
+          descriptionPlaceholder: 説明（任意）
+        enable:
+          title: 有効にする
+          description: 無効にした用語集は用語を保持しますが、いずれも送信されません。
+        sites:
+          title: ウェブサイト
+          description: この用語集を適用するウェブサイトを限定します。example.com はそのアドレスのみ、*.example.com はサブドメインも含み、example.com/docs/* はサイトの一部分だけに絞ります。
+          allSites: 空のままにすると、この用語集はすべてのウェブサイトに適用されます。
+          header: ウェブサイト
+        delete:
+          title: この用語集を削除
+          description: 用語集とその中のすべての用語を削除します。あとで用語を使う可能性があるなら先にエクスポートしてください。削除は元に戻せません。
+          dialog:
+            trigger: 削除
+            title: この用語集を削除しますか？
+            description: "この用語集と、その中の $1 件の用語がすべて完全に削除されます。この操作は元に戻せません。"
+            confirm: 削除
+            cancel: キャンセル
+      addTerm:
+        title: 用語を追加
+        description: 用語に使いたい訳語を指定できます。訳語を空欄にすると原文のままになります。
+      list:
+        title: 登録した用語
+        description: 段落に出現した用語だけが、その段落と一緒に送信されます。
+      importExport:
+        title: インポートとエクスポート
+        description: 用語は source, target, targetLanguage, caseSensitive の 4 列からなる CSV です。エクスポートが書き出す形式と同じです。
+      sourcePlaceholder: 用語
+      targetPlaceholder: 訳語（空欄なら原文のまま）
+      caseSensitive: 大文字と小文字を区別
+      add: 追加
+      searchPlaceholder: 用語を検索
+      columnEnabled: 有効
+      columnSource: 用語
+      columnTarget: 訳語
+      columnTargetLanguage: 翻訳先の言語
+      allLanguages: すべての言語
+      toggleTerm: "「$1」を使用"
+      editTerm: "「$1」を編集"
+      keepOriginal: 原文のまま
+      delete: 削除
+      save: 保存
+      cancel: キャンセル
+      loading: 読み込んでいます...
+      empty: 用語がまだありません。上から追加するか、CSV ファイルをインポートしてください。
+      noMatches: 検索に一致する用語はありません。
+      previous: 前へ
+      next: 次へ
+      pageOf: "$1 / $2"
+      addError:
+        emptySource: 先に用語を入力してください。
+        tooLong: この用語は長すぎます。
+        capReached: "すべての用語集を合わせた用語数が上限の $1 件に達しました。"
+        duplicate: この用語はすでに用語集にあります。
+      import: インポート
+      export: エクスポート
+      importModeMerge: リストに追加
+      importModeReplace: リストを置き換え
+      importEmpty: そのファイルに用語が見つかりませんでした。
+      importMissingHeader: "このファイルは Read Frog の用語集エクスポートではありません。次の列が必要です:"
+      importOverflow: "このインポートは上限を $1 件超えます。変更は行われていません。"
+      importSuccess: "$1 件を新規にインポートし、$2 件を更新しました。"
+      importSkipped: "無効な行 $1 件と重複 $2 件をスキップしました。"
+      importNoValidRows: いずれの行もインポートできませんでした。変更はありません。
+      importReplaceConfirm:
+        title: リスト全体を置き換えますか？
+        description: "この用語集の $1 件すべてが削除され（選択中の言語だけでなく、すべての対象言語が対象です）、このファイルの内容に置き換えられます。この操作は元に戻せません。"
+        confirm: 置き換える
+        cancel: キャンセル
+      deleteAll:
+        title: すべての用語を削除
+        description: 用語集を空にします。あとで使う可能性があるなら先にエクスポートしてください。削除は元に戻せません。
+        deleting: 削除中...
+        dialog:
+          title: すべての用語を削除
+          trigger: すべて削除
+          confirm: 確認
+          cancel: キャンセル
+          description: "$1 件の用語がすべて完全に削除されます。この操作は元に戻せません。"
   contextMenu:
     title: コンテキストメニュー
     pageDescription: ブラウザーの右クリックメニューに表示される Read Frog の項目を設定します。
@@ -736,6 +1186,9 @@ options:
         range:
           main: メインコンテンツ
           all: すべてのコンテンツ
+      translateTitle:
+        title: タブのタイトルを翻訳
+        description: ページを翻訳するときに、ブラウザのタブに表示されるタイトルも翻訳します。オフにすると元のタイトルのままです。
     hoverTranslation:
       title: ホバー翻訳
       enable:
@@ -790,6 +1243,8 @@ options:
       managePrompts: プロンプトを管理
       communityPrompts: コミュニティからプロンプトを取得・共有
       communityPromptsUrl: https://github.com/mengxi-ream/read-frog/discussions/821
+      variableReference: 変数リファレンス
+      variableReferenceUrl: https://readfrog.app/ja/docs/page-translation/prompts/variables
       addPrompt: プロンプトを追加
       default: デフォルト
       builtIn: 組み込み
@@ -953,13 +1408,16 @@ options:
       title: 基本設定
       enable:
         title: 動画字幕を有効にする
-        description: 動画プレーヤーのコントロールバーに翻訳ボタンを表示します。現在は YouTube のみ対応です。
+        description: YouTube、X、Netflix の動画プレーヤーのコントロールバーに翻訳ボタンを表示します。
       autoStart:
         title: 動画を開いたら翻訳する
         description: 動画の読み込みが終わり次第、ボタンを押さなくても字幕の翻訳を始めます。
       aiSegmentation:
         title: AI スマート区切り
-        description: AI が字幕を文として読める形に切り直します。タイミングも AI が決めるため、字幕がずれることがあります。LLM 翻訳プロバイダーが必要です。
+        description: AI が字幕を文単位に切り直します。翻訳の応答が遅くなります。高性能な LLM が必要です。性能の低いモデルでは字幕の欠落やずれが起きることがあります。
+      wordLookupAction:
+        title: 単語クリック時のアクション
+        description: 字幕の単語をクリックしたときに実行する AI アクション。既定は辞書で、自分のアクションにも変更できます。
     aiQuota:
       title: AI字幕の利用枠
       description: AIの音声認識で、どんな動画にも正確な字幕を生成します
@@ -1069,6 +1527,9 @@ options:
           description: すべてのキャッシュされたAI区切り結果が削除されます。次回AI区切りを有効にして動画を再生すると、字幕が再処理されます。
   whatsNew:
     title: 新機能
+    postType:
+      promotion: キャンペーン
+      update: アップデート
   rateUs:
     title: レビューを書く
   configMigration:
@@ -1109,7 +1570,22 @@ translation:
   sameLanguage: ソース言語とターゲット言語は異なる必要があります
   autoModeSameLanguage: 検出された言語 '$1' はターゲット言語と同じです
   extensionContextInvalidated: 拡張機能が更新されました。このページを再読み込みしてからもう一度お試しください。
+annotation:
+  annotate: "注釈を付ける"
+  enterMode: "注釈モード"
+  exitMode: "注釈モードを終了"
+  modeLabel: "注釈モード"
+  noTextSelected: "テキストが選択されていません"
+  tooLong: "注釈を付けるには単語か短いフレーズを選択してください"
+  multipleParagraphs: "注釈を付けるには同じ段落内のテキストを選択してください"
+  translatedTextUnsupported: "翻訳文には注釈を付けられません"
+  unsupportedPlace: "ここのテキストには注釈を付けられません"
+  markOnly: "マークしました。この行間には意味を表示する余白がありません。"
+  failed: "意味を取得できませんでした"
+  remove: "注釈を削除"
 speak:
+  languageDetectionFallback: ローカルの言語検出に切り替えました
+  languageDetectionSettingsHint: 設定で利用可能なLLMに変更するか、ローカル検出を選んでください。
   fetchingAudio: 音声を生成しています...
   playingAudio: 音声を再生しています...
   failedToGenerateSpeech: 音声生成に失敗しました
@@ -1122,6 +1598,7 @@ action:
   regenerate: 再生成
   viewContextDetails: コンテキスト
   customizeCustomAction: $1 アクションをカスタマイズ
+  customActionLayoutFallback: この結果はレイアウトで表示できないため、簡易表示にしています。
   saveToNotebase: Notebase に保存
   saveToNotebaseSaving: 保存中...
   saveToNotebaseSuccess: Notebase に保存しました
@@ -1131,6 +1608,10 @@ action:
   saveToNotebaseLimitExceeded: さらに Notebase ノートを保存するにはアップグレードが必要です
   saveToNotebaseTableUnavailable: 選択した Notebase は利用できなくなりました
   saveToNotebaseConnectionInvalid: この Notebase 接続は古くなっています。Custom AI Actions で更新し、マッピングを修正してください。
+  saveToNotebaseInvalidContent: "AI の回答に形式の合わない値があったため、保存しませんでした。もう一度実行してから保存してください。"
+  saveToNotebaseNoFieldSaved: "保存しませんでした：この操作には Notebase に保存するフィールドがありません。設定で少なくとも 1 つ選んでください。"
+  saveToNotebaseUndecidedTitle: "保存しました。次のフィールドは保存するかまだ決まっていません"
+  saveToNotebaseSkipUndecided: "すべて保存しない"
   saveToNotebaseNoMappings: 保存する前に、少なくとも1つの有効なマッピングを追加してください
   saveToNotebaseCreateTitle: Notebase を作成しますか？
   saveToNotebaseCreateDescription: この Custom Action の出力フィールドに合わせた列を持つ Notebase を作成し、現在の結果を最初のノートとして保存します。
@@ -1152,11 +1633,18 @@ action:
   updatePayment: 支払いを更新
   openCustomActions: Custom AI Actions を開く
   openNotebase: Notebase を開く
+  reviewDueOne: "$1 枚のカードが復習待ち"
+  reviewDueOther: "$1 枚のカードが復習待ち"
   contextDetailsTitleLabel: タイトル
   contextDetailsParagraphsLabel: 段落内容
   translation: 翻訳
   speak: 読み上げ
   playing: 再生中
+  moreActions: その他の操作
+  pinToToolbar: ツールバーに固定
+  unpinFromToolbar: ツールバーから固定解除
+  dragToReorder: ドラッグして並べ替え
+  addCustomAction: カスタム AI アクションを追加
 noteSuggestion:
   title: 保存におすすめ
   description: Notebase に保存したい単語を選んで、いつでも復習できます。
@@ -1173,24 +1661,33 @@ shortcutKeySelector:
   placeholder: ショートカットを入力してください
 subtitles:
   sidebar:
-    close: AI 要約を閉じる
+    close: 学習パネルを閉じる
+    needsSubtitles: この動画には字幕がありません。まず AI 字幕の生成をお試しください。
     menu:
-      label: AI 要約
+      label: 学習
     summary:
+      tab: AI 要約
       generating: 要約を生成しています…
       failedTitle: 生成できませんでした
       retry: 再試行
       needsModel: この動画を要約するには、字幕用の LLM モデルを選んでください。
       openSettings: 設定を開く
-      needsSubtitles: この動画には字幕がありません。まず AI 字幕の生成をお試しください。
+    transcript:
+      tab: 字幕
+      failedTitle: 字幕を読み込めませんでした
+      retry: 再試行
+      emptyTitle: 表示できる字幕がありません
+      backToCurrent: 現在位置へ戻る
   loadingAiSubtitles: AI字幕を読み込み中…（推定3分）
   aiSubtitlesHint: 先進的なAI音声認識により正確な字幕を生成。公式字幕がない動画でも利用できます。
   requestAiSubtitles: AI字幕をリクエスト
   usingAiSubtitles: AI字幕を使用中
+  settings: 字幕設定
   toggle:
     enabled: 字幕翻訳をオンにしました
     disabled: 字幕翻訳をオフにしました
   actions:
+    download: 字幕をダウンロード
     downloadTranslated: 翻訳字幕をダウンロード
     downloadTranslatedPreparing: 字幕を準備中。長い動画は時間がかかる場合があります
     downloadTranslatedTranslating: 字幕を翻訳中
@@ -1208,9 +1705,10 @@ subtitles:
     httpUnknown: HTTP エラー $1
     invalidResponse: YouTube字幕のレスポンス形式が無効です
     networkError: 字幕取得時にネットワークエラーが発生しました
-    fetchSubTimeout: YouTube字幕の取得がタイムアウトしました
+    fetchSubTimeout: 字幕の取得がタイムアウトしました
     buttonNotFound: 字幕ボタンが見つかりません
     noSubtitlesFound: この動画には字幕がありません
+    trackFileNotLoaded: 字幕を読み込めませんでした。ページを再読み込みしてみてください
     videoNotFound: 動画要素が見つかりません
     controlsBarNotFound: コントロールバーが見つかりません
     aiRateLimited: リクエストが多すぎます。後でもう一度お試しください
@@ -1230,11 +1728,13 @@ subtitles:
     translatedExportIncomplete: すべての字幕行を翻訳できませんでした
     translatedExportSameLanguage: 元の言語と翻訳先の言語が同じです
 hostedAi:
-  ultraBadge:
-    tooltip: Ultra プランへの加入が必要です · バッジをクリックしてプランを取得
+  planBadge:
+    pro: Pro または Ultra プランへの加入が必要です · バッジをクリックしてプランを取得
+    ultra: Ultra プランへの加入が必要です · バッジをクリックしてプランを取得
   availability:
     authenticationRequired: ログインすると利用できます
     ultraRequired: Ultra プランが必要です
+    proRequired: Pro または Ultra プランが必要です
     quotaExhausted: 利用枠を使い切りました
     serviceUnavailable: 一時的に利用できません
     usedPercent: "利用枠: $1% 使用済み"
@@ -1249,6 +1749,7 @@ hotkey:
   shift: Shift
   backtick: バッククォート
   clickAndHold: クリックして長押し
+  custom: カスタムショートカット
 translationHub:
   searchLanguages: 言語を検索...
   noLanguagesFound: 言語が見つかりません
@@ -1260,6 +1761,8 @@ translationHub:
   translate: 翻訳
   copiedToClipboard: 翻訳をクリップボードにコピーしました！
   copyTranslation: 翻訳をコピー
+  speakSourceText: 原文を読み上げる
+  speakTranslation: 翻訳文を読み上げる
   expandCard: カードを展開
   collapseCard: カードを折りたたむ
   expandAllCards: すべて展開

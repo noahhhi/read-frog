@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { BUILT_IN_DICTIONARY_ACTION_ID } from "@/utils/constants/custom-action"
 import { BUILT_IN_SUBTITLE_TRANSLATE_PROMPT_IDS } from "@/utils/constants/prompt"
 import {
   MAX_BACKGROUND_OPACITY,
@@ -8,11 +9,11 @@ import {
   MIN_FONT_SCALE,
   MIN_FONT_WEIGHT,
 } from "@/utils/constants/subtitles"
+import { shortcutSchema } from "./shortcut"
 import {
   batchQueueConfigSchema,
   createCustomPromptsConfigSchema,
   MAX_CUSTOM_CSS_LENGTH,
-  pageTranslationShortcutSchema,
   requestQueueConfigSchema,
 } from "./translate"
 
@@ -45,6 +46,12 @@ export const subtitlesStyleSchema = z.object({
   customCSS: z.string().max(MAX_CUSTOM_CSS_LENGTH, "Custom CSS cannot exceed 8KB").nullable(),
 })
 
+/** The players subtitles get translated on. */
+export const subtitlesPlatformSchema = z.enum(["youtube", "xcom", "netflix"])
+
+/** Per platform, whether subtitles start translating as soon as a video loads. */
+export const subtitlesAutoStartSchema = z.record(subtitlesPlatformSchema, z.boolean())
+
 export const subtitlePositionSchema = z.object({
   percent: z.number().min(0).max(100),
   anchor: z.enum(["top", "bottom"]),
@@ -52,11 +59,14 @@ export const subtitlePositionSchema = z.object({
 
 export const videoSubtitlesSchema = z.object({
   enabled: z.boolean(),
-  autoStart: z.boolean(),
-  toggleShortcut: pageTranslationShortcutSchema,
+  autoStart: subtitlesAutoStartSchema,
+  toggleShortcut: shortcutSchema,
   providerId: z.string().nonempty(),
   style: subtitlesStyleSchema,
   aiSegmentation: z.boolean(),
+  // `.default()` is load-bearing: it lets configs stored before this field existed still
+  // parse during the upgrade window, before the v115 migration runs.
+  wordLookupActionId: z.string().nonempty().default(BUILT_IN_DICTIONARY_ACTION_ID),
   requestQueueConfig: requestQueueConfigSchema,
   batchQueueConfig: batchQueueConfigSchema,
   customPromptsConfig: subtitleCustomPromptsConfigSchema,
@@ -69,5 +79,7 @@ export type SubtitlesFontFamily = z.infer<typeof subtitlesFontFamilySchema>
 export type SubtitleTextStyle = z.infer<typeof subtitleTextStyleSchema>
 export type SubtitleContainerStyle = z.infer<typeof subtitleContainerStyleSchema>
 export type SubtitlesStyle = z.infer<typeof subtitlesStyleSchema>
+export type SubtitlesPlatform = z.infer<typeof subtitlesPlatformSchema>
+export type SubtitlesAutoStart = z.infer<typeof subtitlesAutoStartSchema>
 export type SubtitlePosition = z.infer<typeof subtitlePositionSchema>
 export type VideoSubtitles = z.infer<typeof videoSubtitlesSchema>

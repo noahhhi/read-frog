@@ -1,16 +1,20 @@
 import { authClient } from "@/utils/auth/auth-client"
+import { logInAction, upgradeAction } from "@/utils/error-action"
 import { i18n } from "@/utils/i18n"
 import { isORPCForbiddenError, isORPCUnauthorizedError } from "@/utils/notebase/errors"
 import { orpcClient } from "@/utils/orpc/client"
 import { showAiSubtitlesWallToast } from "@/utils/subtitles/toast"
-import { formatQuotaDate, logInAction, quotaResetAt, upgradeAction } from "./entitlement"
+import { formatQuotaDate, quotaResetAt } from "./entitlement"
 
 function promptLogIn(): void {
   showAiSubtitlesWallToast(i18n.t("subtitles.errors.aiLoginRequired"), logInAction())
 }
 
 function promptUpgrade(): void {
-  showAiSubtitlesWallToast(i18n.t("subtitles.errors.aiSubscriptionRequired"), upgradeAction())
+  showAiSubtitlesWallToast(
+    i18n.t("subtitles.errors.aiSubscriptionRequired"),
+    upgradeAction("extension_video_quota"),
+  )
 }
 
 export async function ensureSignedIn(): Promise<boolean> {
@@ -73,7 +77,7 @@ export async function ensureAiSubtitlesEntitled(): Promise<boolean> {
         ? i18n.t("subtitles.errors.aiQuotaExceededWithReset", [resetAt])
         : i18n.t("subtitles.errors.aiQuotaExceeded"),
       // Ultra is the top plan; there is nothing left to sell someone already on it.
-      usage.plan === "ultra" ? undefined : upgradeAction(),
+      usage.plan === "ultra" ? undefined : upgradeAction("extension_video_quota"),
     )
     return false
   }

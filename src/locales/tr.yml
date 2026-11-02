@@ -1,12 +1,15 @@
 name: Read Frog
-extName: Read Frog - Çevir ve Öğren
-extDescription: Read Frog, herhangi bir web sitesinden dilleri derinlemesine öğrenmenize yardımcı olmak için tasarlanmış açık kaynaklı bir tarayıcı uzantısıdır.
+extName: "Read Frog - Yapay Zekâ Çeviri ve Kartlar"
+extDescription: "Web sayfaları ve YouTube, Netflix, X altyazıları için yapay zekâ ile iki dilli çeviri. Yeni kelimeleri kaydedip kartlarla çalışın."
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 account:
   login: Giriş yap
   webApp: Web uygulaması
   logout: Çıkış yap
   logoutError: Çıkış yapılamadı. Lütfen tekrar deneyin.
+  grantAccess: Erişim ver
+  grantAccessHint: readfrog.app erişimi gerekiyor
+  grantAccessError: Erişim verilemedi. Lütfen tekrar deneyin.
 dataTypes:
   string: Metin
   number: Sayı
@@ -54,6 +57,11 @@ popup:
     notification: Read Frog'da yenilikler
   aiSmartContext: AI Akıllı Bağlam
   aiSmartContextDescription: Çeviri kalitesini artırmak için web sayfası bağlamını kullanır. LLM çeviri sağlayıcısı gerektirir.
+  storeReview:
+    title: Read Frog'u beğendiniz mi?
+    description: Mağazaya bırakacağınız kısa bir değerlendirme, diğer okurların onu bulmasına yardımcı olur.
+    action: Değerlendirme yaz
+    dismiss: Kapat
   more:
     title: Daha Fazla
     help: Yardım
@@ -103,9 +111,11 @@ options:
     toggle: Kenar çubuğunu aç/kapat
     settings: Ayarlar
     features: Özellikler
+    translation: Çeviri
     product: Ürün
   tools:
     translationHub: Çeviri Merkezi
+    pdfTranslation: PDF çevirisi
   product:
     roadmap: Yol Haritası
   helpAndCommunity:
@@ -148,6 +158,8 @@ options:
       resetsAt: "$1 tarihinde sıfırlanır"
       daily: Günlük kota
       weekly: Haftalık kota
+      oneTime: Hediye kota
+      expiresAt: "$1 tarihinde sona erer"
       features:
         pageTranslation: Sayfa çevirisi
         customAction: Özel AI eylemleri
@@ -157,13 +169,13 @@ options:
         inputTranslation: Giriş çevirisi
         languageDetection: Dil algılama
     sponsorCta: Hızlı ve uygun maliyetli yapay zekâ al
-    sponsorCtaJalapenoCloud: GLM 5.2ʼde %50 indirim al
+    sponsorCtaJalapenoCloud: GLM 5.3ʼte %50 indirim al
     setApiKeyWarning:
       message: API anahtarınızı $1 sayfasında ayarlayın
     badges:
       featureCount: $1 özellik
       sponsor: Sponsor
-      sponsorJalapenoCloud: $$2 ücretsiz
+      sponsorJalapenoCloud: $$1 ücretsiz
     dialog:
       title: Yeni sağlayıcı ekle
       groups:
@@ -242,7 +254,7 @@ options:
         customChatComplete: Özel Chat Complete
         customResponses: Özel Responses
       attribution:
-        builtInAi: Read Frog tarafından barındırılan standart model. Ultra olmayan kullanıcılar yalnızca özel AI eylemlerinde kullanabilir; Ultra kullanıcıları daha fazla özellikte kullanabilir.
+        builtInAi: Read Frog tarafından barındırılan standart model. Pro ve Ultra kullanıcıları haftalık kotayla tüm özelliklerde kullanabilir; ücretsiz planda yalnızca özel AI eylemlerinde kullanılabilir.
         builtInAiAdvance: Read Frog tarafından barındırılan gelişmiş model, yalnızca Ultra üyelerine özeldir. Sayfa çevirisi, özel AI eylemleri ve diğer tüm yerleşik AI özelliklerinde çalışır; haftalık kota ortaktır. Kotayı standart modelden daha hızlı tüketir.
       description:
         openai: GPT-4o gibi modeller sağlar
@@ -271,7 +283,6 @@ options:
         cerebras: Hızlı çeviri ve metin analizi için ultra hızlı AI çıkarımı
         replicate: Özel çeviri görevleri için çeşitli açık kaynak modellere erişim
         perplexity: Bağlamsal çeviriler ve okuma yardımı için gerçek zamanlı bilgi ile güçlendirilmiş AI
-        vercel: Web içeriği çevirisi ve analizi için optimize edilmiş AI modelleri
         volcengine: Çeviri ve okuma için Doubao modelleri sunan ByteDance'ın bulut AI platformu
         minimax: Gelişmiş MiniMax-M2 modelleri sunan MiniMax AI platformu
         alibaba: Alibaba Cloud'un Qwen model serisi, gelişmiş muhakeme ve çok dilli yeteneklerle
@@ -290,6 +301,7 @@ options:
     featureProviders:
       title: Özellik sağlayıcıları
       description: Her özellik için kullanılacak sağlayıcıyı seçin
+      chooseProvider: Sağlayıcı seç
       features:
         pageTranslation: Sayfa çevirisi
         selectionTranslation: Seçim araç çubuğu çevirisi
@@ -298,7 +310,7 @@ options:
         noteSuggestion: Not önerileri
       descriptions:
         pageTranslation: Sayfanın tamamını iki dilli ya da değiştirme modunda çevirir.
-        selectionTranslation: Seçim araç çubuğundan, seçtiğiniz metni çevirir.
+        selectionTranslation: "Seçtiğiniz metni çevirir; sözcük notlarının anlamı da buradan gelir."
         inputTranslation: Bir metin kutusuna yazdıklarınızı göndermeden önce çevirir.
         videoSubtitles: Video oynatıcıda görünen altyazıları çevirir.
         noteSuggestion: Seçim çevirisinden sonra Notebase'inize kaydetmeye değer kelimeler önerir.
@@ -324,6 +336,8 @@ options:
       llmProviderNotConfigured: $1 için LLM sağlayıcısı seçilmedi
   patterns:
     duplicate: Bu desen zaten listede
+    gluedWildcard: '"*" adresin bir bölümünün tamamının yerini almalıdır, örneğin *.example.com veya example.*'
+    unsupported: Read Frog bu adresi eşleştiremiyor. Bağlantı noktaları ile http ve https dışındaki şemalar desteklenmiyor.
   preference:
     title: Tercihler
     pageDescription: Read Frog'un görünümünü, nerede çalışacağını ve yapılandırmanızın nasıl eşitlenip yedekleneceğini ayarlayın.
@@ -364,16 +378,17 @@ options:
       title: Yapılandırma
       googleDrive:
         title: Google Drive bulut senkronizasyonu
-        description: Uzak daha yeniyse indirir, yerel daha yeniyse yükler
+        description: Uzak daha yeniyse indirir, yerel daha yeniyse yükler. Sözlükleriniz kendi dosyasında taşınır ve tümüyle değiştirilmek yerine terim terim birleştirilir.
         sync: Google Drive'a Senkronize Et
         syncing: Senkronize ediliyor...
         syncSuccess:
           uploaded: Yerel ayarlar buluta yüklendi
           downloaded: Uzak ayarlar uygulandı
-          sameChanges: Yerel ve uzak değişiklikler aynı, senkronize edildi
-          noChange: Zaten güncel
-          unresolved: Çakışmalar çözüldü ve senkronize edildi
-        syncError: Senkronizasyon başarısız, lütfen tekrar deneyin
+          sameChanges: Her iki tarafta aynı ayar değişiklikleri, eşitlendi
+          noChange: Ayarlar zaten güncel
+          unresolved: Ayar çakışmaları çözüldü ve eşitlendi
+        syncError: Ayar eşitlemesi başarısız, lütfen tekrar deneyin
+        accountChangedError: İletişim kutusu açıkken oturum açılan Google hesabı değişti. Hiçbir şey yüklenmedi; yeniden eşitleyin.
         metadataCorrupted: Senkronizasyon meta verileri bozuk, uzak yapılandırma uygulandı
         lastSyncTime: Son senkronizasyon
         logout: Çıkış yap
@@ -409,14 +424,50 @@ options:
             title: Birleştirilmiş yapılandırmada doğrulama hataları var
             description: "Düzeltmek için aşağıdaki farklılıkları ayarlayın:"
           moreErrors: ...ve $1 hata daha
+        glossary:
+          thisDevice: Bu cihaz
+          cloud: Bulut
+          deleted: Silindi
+          disabled: kapalı
+          upToDate: Sözlükler zaten eşit
+          uploaded: Sözlükler buluta yüklendi
+          merged: "Sözlükler eşitlendi: $1 eklendi, $2 güncellendi, $3 silindi"
+          undo: Geri al
+          undone: Sözlükler eşitlemeden önceki haline döndürüldü
+          undoUnavailable: Bu geri alma artık kullanılamıyor — sözlükleriniz o zamandan beri değişti.
+          retry: Eşitleme sırasında sözlük değişti. Yeniden çalıştırın.
+          accountChangedRetry: İletişim kutusu açıkken oturum açılan Google hesabı değişti. Hiçbir şey yüklenmedi; yeniden eşitleyin.
+          busy: Başka bir sekme şu anda sözlüklerinizi eşitliyor.
+          malformed: Drive'daki sözlük dosyası okunamadı, bu yüzden hiçbir şey değişmedi.
+          versionTooNew: O sözlük dosyasını Read Frog'un daha yeni bir sürümü yazmış. Önce uzantıyı güncelleyin.
+          duplicateFiles: Drive'ınızda birden fazla sözlük dosyası var. Hiçbir şey değişmedi - lütfen fazla olanı silin.
+          capExceeded: "Birleştirme sözlük sınırını $1 aşardı. Hiçbir şey değişmedi."
+          failed: Sözlük eşitleme başarısız
+          review:
+            title: Bu sözlük eşitlemesini gözden geçirin
+            description: İki kopyanın ayrıldığı yerlerde neyin kalacağını seçin.
+            firstSync: "Bu cihazda ilk eşitleme: buluttan $1, yukarı $2."
+            accountChanged: "$1 olarak oturum açtınız; bu, cihazın en son eşitlediği hesap değil. Cihazdaki $2 sözlük satırı bu hesaba yüklenecek. Yalnızca bu hesabın sözlüklerini istiyorsanız iptal edin, buradakileri silin ve yeniden eşitleyin."
+            destructive: "Bu eşitleme, bu cihazdaki $2 sözlük satırının $1 tanesini siler."
+            moreConflicts: "Listelenmeyen $1 fark daha var. Her biri birleştirmenin kendi seçimini korur."
+            confirm: Eşitle
+            cancel: İptal
       manualSync:
         title: Manuel yapılandırma senkronizasyonu
-        description: Yapılandırma ayarlarınızı manuel olarak içe ve dışa aktarın
+        description: Ayarlarınızı elle içe ve dışa aktarın, sözlükleriniz de birlikte gelir
         import: İçe Aktar
         export: Dışa Aktar
         importSuccess: Yapılandırma başarıyla içe aktarıldı
         exportSuccess: Yapılandırma başarıyla dışa aktarıldı
+        exportGlossaryFailed: Ayarlarınız dışa aktarıldı, ancak sözlükleriniz okunamadı ve dosyada yer almıyor.
         importError: İçe aktarma başarısız
+        glossaryImported: "$1 terim içe aktarıldı ve önceki sözlükleriniz değiştirildi."
+        glossaryUndo: Geri al
+        glossaryUndone: Sözlükleriniz içe aktarmadan önceki haline döndürüldü
+        glossaryUndoUnavailable: Bu geri alma artık kullanılamıyor — sözlükleriniz o zamandan beri değişti.
+        glossaryMalformed: O dosyadaki sözlükler okunamadı. Hiçbir şey değişmedi.
+        glossaryVersionTooNew: O dosyadaki sözlükleri Read Frog'un daha yeni bir sürümü yazmış. Önce uzantıyı güncelleyin.
+        glossaryCapExceeded: "O dosyada $2 sınırından $1 fazla sözlük satırı var. Hiçbir şey değişmedi."
         exportOptions:
           title: Dışa aktarma seçeneklerini seçin
           description: Lütfen dışa aktarılan yapılandırmaya API Anahtarlarını dahil edip etmemeyi seçin. API Anahtarlarını dahil etmek hassas bilgileri sızdırabilir, bu nedenle yalnızca güvenli ortamlarda kullanılması önerilir.
@@ -455,13 +506,13 @@ options:
           confirm: Sil
       reset:
         title: Yapılandırmayı Sıfırla
-        description: Tüm yapılandırmayı varsayılan değere sıfırla
+        description: Tüm ayarları varsayılan değerlere sıfırla. Sözlükleriniz etkilenmez.
         dialog:
           title: Yapılandırmayı sıfırla
           trigger: Yapılandırmayı sıfırla
           confirm: Onayla
           cancel: İptal
-          description: Bu işlem tüm özel yapılandırmalarınızı temizleyecek ve varsayılan değerlere sıfırlayacaktır. Lütfen onaylayın.
+          description: Bu işlem tüm özel ayarlarınızı silip varsayılan değerlere döndürür. Sözlükleriniz korunur — silmek için sözlük sayfasını kullanın. Lütfen onaylayın.
     userExperience:
       title: Kullanıcı deneyimi
       beta:
@@ -473,7 +524,7 @@ options:
         description: Hataları bulmamıza, arayüzü iyileştirmemize ve daha fazlasına yardım ederek Read Frog'u geliştirin
   shortcuts:
     title: Kısayollar
-    pageDescription: Okurken çeviriyi başlatan tuşları belirleyin.
+    pageDescription: Okurken çeviri, sesli okuma ve AI eylemlerini başlatan tuşları belirleyin.
     setShortcut: Kısayolu ayarla
     pageTranslation:
       title: Sayfa çevirisi
@@ -488,11 +539,25 @@ options:
       title: Altyazı çevirisi
       description: Videonun çevrilmiş altyazılarını açıp kapatır.
     nodeTranslation:
-      title: Paragraf çevirisi
+      title: Üzerine gelme çevirisi
       description: Bir paragrafın üzerine gelin veya uzun basın; yalnızca o paragraf çevrilir.
+      customDescription: Bir paragrafın üzerindeyken bu tuşlara basarak o paragrafı çevirin.
     translationHub:
       title: Çeviri Merkezi
       description: Çeviri Merkezini yeni bir sekmede açar.
+    selectionSpeak:
+      title: "Seçimi sesli okuma"
+      description: "Seçili metni sesli okur. Durdurmak için tekrar basın."
+    selectionAnnotation:
+      title: "Not ekle"
+      description: "Seçili metnin altını çizer ve anlamını satırların arasına yazar."
+    actions:
+      title: "AI eylemleri"
+      description: "Seçili metin üzerinde bir AI eylemi çalıştırır. Özel eylemlerin, burada atayana kadar kısayolu yoktur."
+    turnedOff: "Kapalı olduğu için bu kısayol, tekrar açılana kadar hiçbir şey yapmaz."
+    turnOn: "Aç"
+    clash: "“$1” ile aynı kısayol. Birini değiştirin."
+    taken: "$1 zaten “$2” tarafından kullanılıyor."
   overlayTools:
     title: Kaplama Araçları
   inputTranslation:
@@ -558,6 +623,14 @@ options:
     enable:
       title: Seçim araç çubuğunu etkinleştir
       description: Web sayfalarında metin seçtiğinizde araç çubuğunu göstererek hızlı çeviri, seslendirme ve AI eylemleri sunar
+    annotation:
+      title: "Sözcük notları"
+      enable:
+        title: "Etkinleştir"
+        description: "Seçili sözcüğün veya ifadenin altını çizer ve anlamını satırların arasına yazar"
+      provider:
+        title: "Sağlayıcı"
+        description: "Anlamı üretir; Çevir ile aynı ayardır"
     actions:
       title: Eylemler
       translate:
@@ -595,18 +668,33 @@ options:
       providerUnavailable: Seçilen sağlayıcı kullanılamıyor
     customActions:
       title: Özel AI Eylemleri
-      pageDescription: Kendi istemlerinizi yazın ve seçim araç çubuğundan seçili metin üzerinde çalıştırın.
+      pageDescription: Kendi istemlerinizi yazın ve seçim araç çubuğundan seçili metin üzerinde çalıştırın. Her sonucun verileri, stili ve etkileşimleri tamamen özelleştirilebilir.
       description: Seçilen metin için kendi yapılandırılmış AI eylemlerinizi ekleyin
       configTitle: Eylem yapılandırması
+      introVideo:
+        trigger: "Videoyu izle"
+        title: "30 saniyede Özel AI Eylemleri"
       builtIn: Yerleşik
       add: AI eylemi ekle
       edit: AI eylemini düzenle
       empty: Henüz özel AI eylemi yok
       noEnabledLlmProvider: Özel AI eylemleri oluşturmadan önce en az bir LLM sağlayıcısını etkinleştirin
+      tabs:
+        config: Yapılandırma
+        notebase: Notebase
+        hasErrors: Hatalar var
+        connected: Bağlı
+        needsAttention: İlgilenilmesi gerekiyor
       form:
         name: Ad
         customize: Özelleştir
         customizeTooltip: Yerleşik eylemin istemleri değiştirilemez. Düzenlenebilir bir kopya oluşturup istemleri değiştirmek için bu düğmeye tıklayın.
+        aiConfigHelper:
+          trigger: "Yapay zekâyla yapılandır"
+          title: "Yapay zekâyla yapılandır"
+          description: "Aşağıdaki istemi kopyalayıp kullandığınız yapay zekâ sohbet asistanına (ChatGPT, Claude, DeepSeek, Kimi…) yapıştırın. Önce ne istediğinizi sorar, ardından her ayara ne yazmanız gerektiğini söyler. İstem bu eylemin mevcut ayarlarını içerir ama API anahtarlarını içermez."
+          copy: "İstemi kopyala"
+          copyFailed: "İstem kopyalanamadı. Tekrar deneyin."
         icon: Simge
         iconField:
           chooseAriaLabel: Simge seç
@@ -628,12 +716,13 @@ options:
         fieldType: Alan türü
         fieldDescription: Açıklama
         fieldDescriptionPlaceholder: Bu alanın ne içermesi gerektiğini açıklayın...
-        fieldSpeaking: Sesli okumayı etkinleştir
         actions: İşlemler
         cancel: İptal
         save: Kaydet
         defaultFieldName: sonuç
         fieldNamePlaceholder: alan_adı
+        selectionField: "Seçilen metin"
+        selectionFieldDescription: "Seçtiğiniz metin olduğu gibi kaydedilir. Yapay zekâ yazmaz."
         autoFieldPrefix: alan
         addFieldDialog:
           title: Çıktı alanı ekle
@@ -645,6 +734,69 @@ options:
           description: Bu çıktı alanı kaldırılacaktır.
           confirm: Sil
           cancel: İptal
+        layout:
+          title: Düzen
+          description: Sonucun açılır pencerede nasıl göründüğü. Liquid ile HTML; yanıt akarken alanlar dolar.
+          reset: Varsayılana döndür
+          resetFieldList: Alan listesi
+          resetDictionary: Sözlük kartı
+          resetSentenceAnalysis: Cümle analizi kartı
+          resetImproveWriting: "Yazı iyileştirme kartı"
+          resetConfirmTitle: Bu düzen değiştirilsin mi?
+          resetConfirmDescription: Düzenleyicinin içeriği değiştirilecek. Daha sonra düzenleyicide geri alabilirsiniz.
+          resetConfirm: Değiştir
+          edit: Düzenle
+          preview: Önizleme
+          width: Genişlik
+          themeLight: Açık
+          themeDark: Koyu
+          replay: Yeniden oynat
+          sampleData: Örnek veriler
+          sampleDataHint: Yalnızca bu önizlemede kullanılır ve kaydedilmez.
+          sampleDataSavedHint: Yalnızca bu önizlemede kullanılır ve bu eylemle birlikte kaydedilir.
+          sampleDataReset: Örnekleri sıfırla
+          sampleSelection: Seçili metin
+          sampleTargetLanguage: Hedef dil
+          insertField: Alan
+          insertSpeak: Seslendirme düğmesi
+          insertCondition: Doluysa
+          insertContext: Bağlam
+          insertLoop: Tüm alanlar
+          syntaxHelp: Sözdizimi
+          builtInHint: Yerleşik eylemin düzeni düzenlenemez. Bir kopyasını düzenlemek için özelleştirin.
+          viewSource: Kaynağı görüntüle
+          emptyNotice: Bu düzen boş olduğu için açılır pencerede varsayılan alan listesi gösterilir.
+          fallbackBanner: Bu düzen gösterilemediği için varsayılan düzen kullanılıyor. $1
+          sanitized: "Güvenlik için kaldırıldı: $1"
+          unusedFields: "Bu düzende yok:"
+          tooLong: Bir düzen en fazla $1 karakter olabilir.
+          renameSkipped: Düzen hâlâ "$1" alanına başvuruyor. Elle güncelleyin.
+          reservedName: '"ctx" ve "forloop" düzenlerde ayrılmış adlardır. Başka bir ad seçin.'
+          help:
+            output: Bir alanın değerini gösterir. Değerdeki HTML kaçışlanır.
+            condition: İçeriği yalnızca alanın bir değeri olduğunda gösterir.
+            loop: Her alan için sırayla tekrarlanır. f.name, f.value ve f.type kullanılabilir.
+            speak: data-speak içeren her öğe, yanıt tamamlandığında değeri (değer boşsa kendi metnini) sesli okur.
+            speakLang: data-speak-lang okuma dilini belirtir (es veya en-US gibi bir kod), böylece o dilin sesi kullanılır. Belirtilmezse dil otomatik algılanır; tek bir kelimede bu çoğu zaman yanılır.
+            speakAutoplay: data-speak-autoplay içeren öğe, yanıt tamamlandığında kendiliğinden sesli okunur. Yalnızca ilk böyle öğe çalınır.
+            status: Duruma göre stil verir. Kapsayıcının data-status değeri streaming, done veya error olur.
+            filters: newline_to_br satır sonlarını korur (en sona koyun); lines metni satır listesine böler.
+            styles: <style> bloğundaki CSS yalnızca bu sonucun içinde geçerlidir. --rf-* renkleri açık ve koyu temayı izler.
+          lint:
+            parseError: "Liquid sözdizimi hatası: $1"
+            unknownField: '"$1" adında bir alan yok.'
+            unknownContextKey: 'ctx içinde "$1" yok. Kullanılabilir: $2.'
+            fieldShadowedByLocal: Bu düzen "$1" adına değer atıyor; bu, aynı adlı alanı gizler.
+            liquidInStyle: <style> içinde Liquid çalışmaz; bu düz metin olarak kalır.
+            styleInConditional: Bir <style> bloğu, "$1" etiketinin içinde olsa bile her zaman uygulanır.
+            cssImport: "@import kaldırılır. Düzenler dış stilleri yükleyemez."
+            cssFontFace: "@font-face kaldırılır. Cihazda zaten bulunan yazı tiplerini kullanın."
+            unquotedAttributeOutput: Bu öznitelik değerini tırnak içine alın, yoksa değer öznitelikten taşabilir.
+            filterIgnored: '"$1" etiketinde filtreler yok sayılır. Önce filtrelenmiş değeri atayın.'
+            newlineToBrNotLast: newline_to_br yalnızca bir çıktının son filtresi olarak çalışır.
+            tooLong: Bu düzen $1 karakterden uzun ve kaydedilemez.
+            fieldNotShown: '"$1" bu düzende gösterilmiyor.'
+            reservedFieldName: '"$1" alan adı düzenlerde ayrılmıştır. Alanı yeniden adlandırın.'
         notebase:
           title: Notebase bağlantısı
           description: Bu eylemin yapılandırılmış sonuçlarını uzak bir Notebase'e kaydedin.
@@ -676,16 +828,16 @@ options:
           schemaErrorDescription: Kısa süre sonra yeniden yenilemeyi deneyin.
           schemaLoading: notebase şeması yükleniyor...
           mappingsLabel: Alan eşlemeleri
-          mappingsEmpty: Henüz eşleme yok. Alanları kaydetmeye hazır olduğunuzda bir tane ekleyin.
-          addMappingAction: Eşleme ekle
-          removeMappingAction: Eşlemeyi kaldır
           localFieldLabel: Eylem alanı
-          localFieldPlaceholder: Bir eylem alanı seçin
           remoteFieldLabel: Notebase alanı
-          remoteFieldPlaceholder: Bir notebase alanı seçin
           columnUnavailableOption: silinmiş
           invalidMappingsTitle: Bazı eşlemeler ilgi gerektiriyor
           invalidMappingsDescription: Geçersiz eşlemeler korunur. Notebase'e kaydetmeden önce düzeltin.
+          noFieldSavedTitle: "Bu Notebase'e hiçbir alan kaydedilmiyor"
+          noFieldSavedDescription: "Not kaydetmek için en az bir alana bir Notebase alanı seçin."
+          mappingSummary: "Kaydedilen $1 · Atlanan $2 · Kararsız $3"
+          skipFieldOption: "Kaydetme"
+          undecidedFieldPlaceholder: "Bir Notebase alanı seçin ya da kaydetmeyin"
           mappingMissingLocal: Eşlenen eylem alanı artık yok.
           mappingMissingRemote: Eşlenen notebase alanı artık yok.
           mappingMissingSchema: Bu eşlemeyi doğrulamak için notebase şemasını yenileyin.
@@ -695,6 +847,7 @@ options:
           paragraphs: Seçimle kesişen paragraf metni; boş satırlarla birleştirilir ve özel AI eylemlerine gönderilirken ilk 2000 karaktere kısaltılır
           targetLanguage: Kullanıcının hedef dili
           webTitle: Web sayfası başlığı
+          webUrl: Geçerli sayfanın tam URL'si
           webContent: Geçerli sayfadan çıkarılan ve ilk 2000 karaktere kısaltılan web sayfası içeriği
         delete: Sil
         deleteDialog:
@@ -702,6 +855,194 @@ options:
           description: Bu işlem geri alınamaz.
           confirm: Sil
           cancel: İptal
+      templates:
+        dictionary:
+          name: "Sözlük"
+          description: "Sözcükleri tanım, okunuş ve paragraf çevirisiyle arayın"
+          systemPrompt: |-
+            Dil öğrenenler için bir sözlük asistanısınız.
+
+            ## Amaç
+            Verilen sözcük ve çevresindeki paragraflara dayanarak, istenen çıktı nesnesine uyan kısa bir sözlük maddesi oluşturun.
+
+            ## Kurallar
+            1. Verilen paragraflara en iyi uyan anlama odaklanın.
+            2. Sözcüğü temel/sözlük biçimine getirin.
+            3. Tanımı kesin ve öğrenenlerin anlayacağı şekilde yazın.
+            4. Cümle için verilen paragraflardan yalnızca seçilen sözcüğü içeren tam cümleyi çıkarın. Önceki ve sonraki cümleleri eklemeyin.
+            5. Cümle çevirisi yalnızca çıkarılan Cümleyi çevirmelidir.
+            6. Okunuş, sözcüğün dilinin standart gösterimini kullanmalıdır (örneğin İngilizce için IPA, Mandarin Çincesi için pinyin, Japonca için romaji).
+            7. Sözcük türünü İngilizce yazın (noun, verb, adjective vb.).
+            8. Zorluk bir CEFR düzeyi olmalıdır (A1, A2, B1, B2, C1 veya C2).
+            9. Bir alan bilinmiyorsa tahmin etmek yerine boş bir dize döndürün.
+            10. Açıklık için kaynak biçimde metin gerekmedikçe tüm metin alanlarını {{targetLanguage}} dilinde yanıtlayın.
+            11. Cümledeki biçim, seçilen sözcüğün Cümlede nerede durduğunu işaretler. {"text": ...} öğelerinden oluşan kısa bir JSON dizisi içeren bir DİZEDİR; her öğe Cümleden harfi harfine alıntı yapar, örneğin [{"text":"blossoms"}]. Cümle sözcüğü ayrı parçalara bölüyorsa (örneğin "Er ruft seine Mutter an" içindeki "anrufen"), her parça için sırayla bir öğe verin: [{"text":"ruft"},{"text":"an"}]. İçteki tırnak işaretlerini doğru şekilde kaçış karakteriyle yazın.
+            12. Akılda tutma ipuçları, iyi bir öğretmenin tam da bu sözcük için yapacağı gibi, öğrencinin seçilen sözcüğün kendisini (çevirisini değil, kendi dilindeki hâlini) hatırlamasına yardım eder. Her satırda bir tane olmak üzere en fazla 3 ipucu verin, en yararlısı başta olsun. Yalnızca gerçekten işe yarayan ipuçlarını yazın; zayıf bir ipucu eklemektense az ipucu daha iyidir. Gerçekten işe yarayan bir şey yoksa zorla ipucu üretmeyin, boş bir dize döndürün. Her satır tek bir tekniktir: satıra tekniğin adı ve iki nokta ile başlayın; teknik adı da içerik de {{targetLanguage}} dilinde olsun. Önce sözcüğün nasıl kurulduğundan başlayın, sonra gerçekten işe yarayan başka şeyleri ekleyin:
+               - Sözcük yapısı: anlamlı parçaları (kök, ön ek, son ek ya da birleşik sözcüğü oluşturan sözcükler) ve bunların anlamı nasıl oluşturduğu.
+               - Karakterler: Çince karakterlerle yazılan bir sözcük için (Çince, Japoncadaki kanji sözcükler, Çince kökenli Korece sözcükler) her karakterin anlamı ya da bir karakterin parçaları.
+               - Köken: sözcüğün nereden geldiği ya da öğrencinin muhtemelen bildiği ilgili bir sözcük (başka bir dilde aynı kökten bir sözcük, bir alıntı sözcük, başka bir dilde aynı karakterlerle yazılan sözcük).
+               - Eş / Karşıt anlamlı: yakın anlamlı bir sözcük ve farkı ya da karşıt anlamlısı.
+               - Karıştırılan sözcük: yazılışı ya da söylenişi benzeyen bir sözcük ve ikisinin nasıl ayırt edileceği.
+               - Eşdizim: sözcüğün sıkça kullanıldığı, tek parça olarak öğrenmeye değer bir kalıp.
+               Uymayan teknikleri atlayın; bir tekniğin uymadığını söyleyen satır yazmayın. Her ipucu Tanım'da olmayan bir şey öğretmelidir: anlamı başka sözlerle tekrarlamayın, Cümle'yi yeniden anlatmayın, çekimli biçimi açıklamayın. Yalnızca emin olduğunuz bilgileri yazın: köken, kök ya da karakter parçası uydurmayın. Tartışmalı ya da efsane niteliğindeki köken hikâyelerini, “sadece eğlenceli bir hatırlama yolu” diye sunarak bile yazmayın (sincere “balmumsuz” anlamından gelmez, posh da bir kısaltma değildir). Bir sözcüğü parçalara ya da karakterlere yalnızca bunlar gerçekten anlamı oluşturuyorsa ayırın; 犹豫 ya da 葡萄 gibi sözcükler bir bütündür, onlar için başka bir teknik kullanın. Hiçbir dilde ses benzerliğine dayalı kelime oyunu yapmayın ve bir sözcüğü alakasız sözcüklere bölmeyin.
+
+            ## Örnekler
+
+            ### Örnek 1
+            Girdi: Seçim="blossoms", Paragraflar="Spring arrives quietly in the park. The ephemeral beauty of cherry blossoms reminds us to cherish each moment. Families and friends gather beneath the trees.", Hedef dil=Çince
+
+            Çıktı:
+            - Sözcük: blossom
+            - Okunuş: /ˈblɒs.əm/
+            - Sözcük türü: noun
+            - Cümle: The ephemeral beauty of cherry blossoms reminds us to cherish each moment.
+            - Cümledeki biçim: [{"text":"blossoms"}]
+            - Tanım: 花；花朵（尤指果树的花）
+            - Cümle çevirisi: 樱花短暂的美丽提醒我们珍惜每一刻。
+            - Akılda tutma ipuçları:
+              词源：和 bloom（开花）同源，bl- 开头的 bloom、blossom 都和开花有关
+              近义词：bloom 多指花开的状态，blossom 常指果树（樱桃、苹果）的花
+            - Zorluk: B2
+
+            ### Örnek 2
+            Girdi: Seçim="感動", Paragraflar="この映画はつまらないと思ったけど、最後は感動した。", Hedef dil=İngilizce
+
+            Çıktı:
+            - Sözcük: 感動
+            - Okunuş: kandou
+            - Sözcük türü: noun
+            - Cümle: この映画はつまらないと思ったけど、最後は感動した。
+            - Cümledeki biçim: [{"text":"感動"}]
+            - Tanım: Being deeply moved; emotional touch
+            - Cümle çevirisi: I thought this movie was boring, but the ending was moving.
+            - Akılda tutma ipuçları:
+              Characters: 感 (feel) + 動 (move): your feelings are moved.
+              Collocation: 感動する = to be moved; 感動的 = moving, touching.
+            - Zorluk: B1
+          prompt: |-
+            ## Girdi
+            Seçim: {{selection}}
+            Paragraflar: {{paragraphs}}
+            Hedef dil: {{targetLanguage}}
+          fieldTerm: "Sözcük"
+          fieldTermDescription: "Seçilen sözcüğün temel/sözlük biçimi."
+          fieldPhonetic: "Okunuş"
+          fieldPhoneticDescription: "Sözcüğün dili için standart okunuş gösterimi (örneğin İngilizce için IPA, Mandarin Çincesi için pinyin, Japonca için romaji)."
+          fieldPartOfSpeech: "Sözcük türü"
+          fieldPartOfSpeechDescription: "Dilbilgisel kategori (örneğin noun, verb, adjective)."
+          fieldSentence: "Cümle"
+          fieldSentenceDescription: "Yukarıdaki paragraflarda seçilen sözcüğü içeren tam cümle. Önceki ve sonraki cümleleri eklemeyin."
+          fieldSentenceTerm: "Cümledeki biçim"
+          fieldSentenceTermDescription: 'Seçilen sözcüğün Cümledeki yeri: dizeye dönüştürülmüş bir JSON dizisi; sözcüğün her parçası için bir {"text": dize} öğesi, her biri Cümleden birebir alıntı (örneğin [{"text":"blossoms"}]).'
+          fieldDefinition: "Tanım"
+          fieldDefinitionDescription: "Bağlamdaki anlam için kısa bir tanım."
+          fieldSentenceTranslation: "Cümle çevirisi"
+          fieldSentenceTranslationDescription: "Yalnızca Cümlenin çevirisi."
+          fieldMemoryTips: "Akılda tutma ipuçları"
+          fieldMemoryTipsDescription: "Sözcüğü hatırlamanın yolları: en fazla 3 ipucu, her satırda bir tane, her biri teknik adı ve iki nokta ile başlar (ör. Sözcük yapısı: …); gerçekten işe yarayan bir şey yoksa boş dize."
+          fieldDifficulty: "Zorluk"
+          fieldDifficultyDescription: "Tahmini CEFR zorluk düzeyi: A1, A2, B1, B2, C1 veya C2."
+        sentenceAnalysis:
+          name: "Cümle Analizi"
+          description: "Uzun bir cümleyi öğretmen gibi işaretler: çekirdeği, her yan cümleyi ve zor noktaları"
+          fieldSentence: "Cümle"
+          fieldAnnotations: "Açıklamalar"
+          fieldTranslation: "Çeviri"
+          roles:
+            subject: "Özne"
+            predicate: "Yüklem"
+            object: "Nesne"
+            complement: "Tümleç"
+            attributive: "Niteleyici"
+            adverbial: "Zarf tümleci"
+            appositive: "Açıklayıcı"
+            connector: "Bağlaç"
+          clauses:
+            subject: "Özne yan cümlesi"
+            object: "Nesne yan cümlesi"
+            complement: "Tümleç yan cümlesi"
+            attributive: "Sıfat yan cümlesi"
+            adverbial: "Zarf yan cümlesi"
+            appositive: "Açıklama yan cümlesi"
+            clause: "Yan cümle"
+          adverbialClauses:
+            time: "Zaman yan cümlesi"
+            place: "Yer yan cümlesi"
+            cause: "Sebep yan cümlesi"
+            condition: "Koşul yan cümlesi"
+            concession: "Karşıtlık yan cümlesi"
+            purpose: "Amaç yan cümlesi"
+            result: "Sonuç yan cümlesi"
+            manner: "Tarz yan cümlesi"
+            comparison: "Karşılaştırma yan cümlesi"
+          forms:
+            infinitive: "Mastar"
+            gerund: "İsim-fiil"
+            presentParticiple: "-ing"
+            pastParticiple: "V3"
+          senses:
+            time: "Zaman"
+            place: "Yer"
+            cause: "Sebep"
+            condition: "Koşul"
+            concession: "Karşıtlık"
+            purpose: "Amaç"
+            result: "Sonuç"
+            manner: "Tarz"
+            comparison: "Karşılaştırma"
+          obstacles:
+            inversion: "Devrik"
+            fronting: "Öne alma"
+            ellipsis: "Eksiltme"
+            passive: "Edilgen"
+            subjunctive: "Dilek kipi"
+            parenthesis: "Ara söz"
+            dummyIt: "Sahte özne"
+            postponedSubject: "Gerçek özne"
+            cleft: "Vurgu yapısı"
+            comparison: "Karşılaştırma"
+            negation: "Olumsuzluk"
+            split: "Ayrık"
+            idiom: "Deyim"
+          restoreLabel: "Düz sıra:"
+          hardLabel: "Zor"
+          trunkLabel: "Sadece iskelet"
+          slashesLabel: "Duraklar"
+        improveWriting:
+          name: "Yazıyı iyileştir"
+          description: "Bir öğretmen gibi hataları ve doğal olmayan ifadeleri işaretler, metni duruma göre düzeltir"
+          fieldOriginal: "Orijinal metin"
+          fieldSetting: "Bağlam"
+          fieldAnnotations: "İşaretler"
+          fieldImproved: "Düzeltilmiş metin"
+          fieldSummary: "Özet"
+          types:
+            spelling: "Yazım"
+            grammar: "Dil bilgisi"
+            punctuation: "Noktalama"
+            wordChoice: "Sözcük seçimi"
+            logic: "Mantık"
+            unnatural: "Doğal değil"
+            register: "Üslup"
+            clarity: "Açıklık"
+            good: "İyi seçim"
+          tiers:
+            error: "Hata"
+            awkward: "Pürüzlü"
+            good: "İyi"
+          hideFixesLabel: "Düzeltmeleri gizle"
+          hiddenHintLabel: "Önce kendiniz düzeltmeyi deneyin."
+          showImprovedLabel: "Göster"
+          improvedLabel: "Düzeltilmiş metin"
+          copyLabel: "Kopyala"
+          unchangedLabel: "Değiştirilecek bir şey yok"
+          removeLabel: "sil"
+        blank:
+          prompt: |-
+            ## Girdi
+            Seçim: {{selection}}
+            Paragraflar: {{paragraphs}}
+            Hedef dil: {{targetLanguage}}
       errors:
         nameRequired: Ad gerekli
         duplicateName: 'Yinelenen eylem adı "$1"'
@@ -710,6 +1051,115 @@ options:
         outputSchemaRequired: En az bir çıktı alanı ekleyin
         fieldKeyRequired: Alan adı gerekli
         duplicateFieldKey: Alan adları benzersiz olmalıdır
+  advanced:
+    title: Gelişmiş
+    pageDescription: Her gün kullanılmayan, güçlü ayarlar.
+    glossary:
+      title: Terim sözlüğü
+      pageDescription: Sizin için önemli olan sözcüklere sabit bir çeviri verin ve her listenin nerede geçerli olacağını seçin.
+      untitled: Adsız terim sözlüğü
+      noGlossaries: Henüz terim sözlüğü yok.
+      enable:
+        title: Etkinleştir
+        description: Eşleşen terimleri LLM'ye gönderir, böylece onları istediğiniz gibi çevirir. Terim sözlüğü istemin içinde gönderilir, bu yüzden yalnızca LLM sağlayıcısı üzerinde çalışan özellikler için geçerlidir.
+      library:
+        title: Terim sözlükleriniz
+        description: Her terim sözlüğünün kendi terimleri ve kendi site listesi vardır; böylece iş için hazırladığınız terimler diğer her yerde karşınıza çıkmaz.
+        button: Terim sözlüğü ekle
+        capReached: "En fazla $1 terim sözlüğünüz olabilir."
+        termUsage: "Tüm terim sözlükleriniz için ayrılan toplam $2 terimin $1 tanesi kullanıldı."
+      summary:
+        terms: "$1 terim"
+        termsOne: 1 terim
+        allSites: Tüm web siteleri
+        sites: "$1 web sitesi"
+        sitesOne: 1 web sitesi
+      editor:
+        docsLink: Nasıl çalışır?
+        sections:
+          terms: Terimler
+          maintenance: Yedekleme ve silme
+        details:
+          title: Ad ve açıklama
+          descriptionPlaceholder: Açıklama (isteğe bağlı)
+        enable:
+          title: Etkinleştir
+          description: Devre dışı bırakılan bir terim sözlüğü terimlerini korur ama hiçbirini göndermez.
+        sites:
+          title: Web siteleri
+          description: Bu terim sözlüğünü belirli web siteleriyle sınırlayın. example.com yalnızca o adres; *.example.com alt alan adlarını ekler; example.com/docs/* siteyi tek bir bölüme daraltır.
+          allSites: Burayı boş bırakırsanız terim sözlüğü her yerde geçerli olur.
+          header: Web sitesi
+        delete:
+          title: Bu terim sözlüğünü sil
+          description: Terim sözlüğünü ve içindeki tüm terimleri kaldırır. Terimlere sonra ihtiyacınız olabilirse önce dışa aktarın — bu işlem geri alınamaz.
+          dialog:
+            trigger: Sil
+            title: Bu terim sözlüğü silinsin mi?
+            description: "Terim sözlüğü ve içindeki $1 terimin tamamı kalıcı olarak silinecek. Bu işlem geri alınamaz."
+            confirm: Sil
+            cancel: İptal
+      addTerm:
+        title: Terim ekle
+        description: Bir terime istediğiniz çeviriyi verin ya da özgün hâlini korumak için çeviriyi boş bırakın.
+      list:
+        title: Terimleriniz
+        description: Bir paragrafla yalnızca o paragrafta geçen terimler gönderilir.
+      importExport:
+        title: İçe ve dışa aktarma
+        description: Terimler source, target, targetLanguage ve caseSensitive sütunlarından oluşan bir CSV dosyasıdır — Dışa aktar bu dosyayı yazar.
+      sourcePlaceholder: Terim
+      targetPlaceholder: Çeviri (özgün hâlini korumak için boş bırakın)
+      caseSensitive: Büyük/küçük harfe duyarlı
+      add: Ekle
+      searchPlaceholder: Terim ara
+      columnEnabled: Etkin
+      columnSource: Terim
+      columnTarget: Çeviri
+      columnTargetLanguage: Hedef dil
+      allLanguages: Tüm diller
+      toggleTerm: "$1 terimini kullan"
+      editTerm: "$1 terimini düzenle"
+      keepOriginal: Özgün hâlini koru
+      delete: Sil
+      save: Kaydet
+      cancel: İptal
+      loading: Yükleniyor...
+      empty: Henüz terim yok. Yukarıdan ekleyin veya bir CSV dosyası içe aktarın.
+      noMatches: Aramanızla eşleşen terim yok.
+      previous: Önceki
+      next: Sonraki
+      pageOf: "$1 / $2"
+      addError:
+        emptySource: Önce bir terim girin.
+        tooLong: Bu terim çok uzun.
+        capReached: "Tüm terim sözlüklerinizdeki toplam terim sayısı $1 limitine ulaştı."
+        duplicate: Bu terim zaten sözlüğünüzde var.
+      import: İçe aktar
+      export: Dışa aktar
+      importModeMerge: Listeye ekle
+      importModeReplace: Listeyi değiştir
+      importEmpty: Bu dosyada terim bulunamadı.
+      importMissingHeader: "Bu dosya bir Read Frog sözlük dışa aktarımı değil. Şu sütunlar gerekli:"
+      importOverflow: "Bu içe aktarma limiti $1 terim aşacak. Hiçbir şey değiştirilmedi."
+      importSuccess: "$1 yeni terim içe aktarıldı, $2 terim güncellendi."
+      importSkipped: "$1 geçersiz satır ve $2 yinelenen terim atlandı."
+      importNoValidRows: Bu satırların hiçbiri içe aktarılamadı. Hiçbir şey değiştirilmedi.
+      importReplaceConfirm:
+        title: Listenin tamamı değiştirilsin mi?
+        description: "Bu sözlükteki $1 terimin tamamı silinecek — yalnızca seçili dil değil, tüm hedef diller — ve bu dosyanın içeriğiyle değiştirilecek. Bu işlem geri alınamaz."
+        confirm: Değiştir
+        cancel: İptal
+      deleteAll:
+        title: Tüm terimleri sil
+        description: Terim sözlüğünüzü boşaltır. Terimlere sonra ihtiyacınız olabilirse önce dışa aktarın — silme işlemi geri alınamaz.
+        deleting: Siliniyor...
+        dialog:
+          title: Tüm terimleri sil
+          trigger: Tümünü sil
+          confirm: Onayla
+          cancel: İptal
+          description: "$1 terimin tamamı kalıcı olarak silinecek. Bu işlem geri alınamaz."
   contextMenu:
     title: Bağlam Menüsü
     pageDescription: Tarayıcının sağ tık menüsündeki Read Frog seçeneklerini yönetin.
@@ -736,6 +1186,9 @@ options:
         range:
           main: Ana içerik
           all: Tüm içerik
+      translateTitle:
+        title: Sekme başlığını çevir
+        description: Tarayıcı sekmesinde görünen sayfa başlığını da çevirir. Orijinal başlığı korumak için devre dışı bırakın.
     hoverTranslation:
       title: Üzerine gelme çevirisi
       enable:
@@ -790,6 +1243,8 @@ options:
       managePrompts: Promptları yönet
       communityPrompts: Topluluktan prompt al veya paylaş
       communityPromptsUrl: https://github.com/mengxi-ream/read-frog/discussions/821
+      variableReference: Değişken başvurusu
+      variableReferenceUrl: https://readfrog.app/tr/docs/page-translation/prompts/variables
       addPrompt: Prompt ekle
       default: Varsayılan
       builtIn: Yerleşik
@@ -953,13 +1408,16 @@ options:
       title: Temel ayarlar
       enable:
         title: Video altyazılarını aç
-        description: Oynatıcı kontrollerine bir çeviri düğmesi ekler. Şimdilik yalnızca YouTube destekleniyor.
+        description: YouTube, X ve Netflix'te oynatıcı kontrollerine bir çeviri düğmesi ekler.
       autoStart:
         title: Video açılınca çevir
         description: Video yüklenir yüklenmez, düğmeye basmadan altyazıları çevirmeye başlar.
       aiSegmentation:
         title: AI akıllı bölümlendirme
-        description: Yapay zekâ altyazıları cümle gibi okunan satırlara yeniden böler. Zamanlamayı da kendisi belirlediği için satırlar kayabilir. LLM çeviri sağlayıcısı gerekir.
+        description: Yapay zekâ altyazıları cümlelere yeniden böler. Çeviriler daha geç gelir. Güçlü bir LLM gerekir; zayıf modeller satırları atlayabilir veya kaydırabilir.
+      wordLookupAction:
+        title: Sözcük arama eylemi
+        description: Altyazıdaki bir sözcüğe tıklandığında çalışan yapay zeka eylemi. Varsayılan sözlüktür; kendi eyleminizi seçebilirsiniz.
     aiQuota:
       title: Yapay zekâ altyazı kotası
       description: Yapay zeka konuşma tanıma ile her video için doğru altyazı üretir
@@ -1069,6 +1527,9 @@ options:
           description: Tüm önbelleğe alınmış AI bölümlendirme sonuçları silinecektir. AI bölümlendirme etkinleştirilmiş bir video oynatıldığında altyazılar yeniden işlenecektir.
   whatsNew:
     title: Yenilikler
+    postType:
+      promotion: Kampanya
+      update: Güncelleme
   rateUs:
     title: Bizi Değerlendirin
   configMigration:
@@ -1109,7 +1570,22 @@ translation:
   sameLanguage: Kaynak ve hedef diller farklı olmalıdır
   autoModeSameLanguage: Algılanan dil '$1' hedef dille aynı
   extensionContextInvalidated: Uzantı güncellendi. Bu sayfayı yenileyip tekrar deneyin.
+annotation:
+  annotate: "Not ekle"
+  enterMode: "Not modu"
+  exitMode: "Not modundan çık"
+  modeLabel: "Not modu"
+  noTextSelected: "Seçili metin yok"
+  tooLong: "Not eklemek için bir sözcük veya kısa bir ifade seçin"
+  multipleParagraphs: "Not eklemek için tek bir paragraf içinden metin seçin"
+  translatedTextUnsupported: "Çevrilmiş metne not eklenemez"
+  unsupportedPlace: "Buradaki metne not eklenemez"
+  markOnly: "İşaretlendi. Bu satırların arasında anlamı için yer yok."
+  failed: "Anlam alınamadı"
+  remove: "Notu kaldır"
 speak:
+  languageDetectionFallback: Yerel dil algılamaya geçildi
+  languageDetectionSettingsHint: Ayarlardan kullanılabilir bir LLM veya yerel algılamayı seçin.
   fetchingAudio: Ses oluşturuluyor...
   playingAudio: Ses çalınıyor...
   failedToGenerateSpeech: Konuşma oluşturulamadı
@@ -1122,6 +1598,7 @@ action:
   regenerate: Yeniden oluştur
   viewContextDetails: Bağlam
   customizeCustomAction: $1 eylemini özelleştir
+  customActionLayoutFallback: Bu sonuç kendi düzeninde gösterilemediği için sade görünümde gösteriliyor.
   saveToNotebase: Notebase'e Kaydet
   saveToNotebaseSaving: Kaydediliyor...
   saveToNotebaseSuccess: Notebase'e kaydedildi
@@ -1131,6 +1608,10 @@ action:
   saveToNotebaseLimitExceeded: Daha fazla Notebase notu kaydetmek için yükseltme gerekir
   saveToNotebaseTableUnavailable: Seçilen Notebase artık kullanılamıyor
   saveToNotebaseConnectionInvalid: Bu Notebase bağlantısı güncel değil. Custom AI Actions içinde yenileyin ve eşlemeleri düzeltin.
+  saveToNotebaseInvalidContent: "Yapay zekâ yanıtında biçimi hatalı bir değer var, bu yüzden kaydedilmedi. Eylemi yeniden çalıştırıp sonra kaydedin."
+  saveToNotebaseNoFieldSaved: "Kaydedilmedi: bu eylem Notebase'e hiçbir alan kaydetmiyor. Ayarlarından en az birini seçin."
+  saveToNotebaseUndecidedTitle: "Kaydedildi. Bu alanları kaydedip kaydetmeyeceğinize henüz karar vermediniz"
+  saveToNotebaseSkipUndecided: "Hiçbirini kaydetme"
   saveToNotebaseNoMappings: Kaydetmeden önce en az bir geçerli eşleme ekleyin
   saveToNotebaseCreateTitle: Bir Notebase oluşturulsun mu?
   saveToNotebaseCreateDescription: Bu Custom Action çıktı alanlarıyla eşleşen sütunlara sahip bir Notebase oluşturur ve bu sonucu ilk not olarak kaydeder.
@@ -1152,11 +1633,18 @@ action:
   updatePayment: Ödemeyi güncelle
   openCustomActions: Custom AI Actions'ı aç
   openNotebase: Notebase'i aç
+  reviewDueOne: "$1 kart tekrar bekliyor"
+  reviewDueOther: "$1 kart tekrar bekliyor"
   contextDetailsTitleLabel: Başlık
   contextDetailsParagraphsLabel: Paragraflar
   translation: Çeviri
   speak: Oku
   playing: Çalınıyor
+  moreActions: Diğer eylemler
+  pinToToolbar: Araç çubuğuna sabitle
+  unpinFromToolbar: Araç çubuğundan kaldır
+  dragToReorder: Sıralamak için sürükleyin
+  addCustomAction: Özel AI eylemi ekle
 noteSuggestion:
   title: Kaydetmek isteyebilirsiniz
   description: Notebase'inize kaydetmek istediğiniz kelimeleri seçin ve dilediğiniz zaman tekrarlayın.
@@ -1173,24 +1661,33 @@ shortcutKeySelector:
   placeholder: Lütfen kısayolu girin
 subtitles:
   sidebar:
-    close: AI özetini kapat
+    close: Öğrenme panelini kapat
+    needsSubtitles: Bu videoda altyazı yok — önce AI ile altyazı oluşturmayı deneyin.
     menu:
-      label: AI özeti
+      label: Öğrenme
     summary:
+      tab: AI özeti
       generating: Özet oluşturuluyor…
       failedTitle: Oluşturulamadı
       retry: Tekrar dene
       needsModel: Bu videoyu özetlemek için altyazılara bir LLM modeli seçin.
       openSettings: Ayarları aç
-      needsSubtitles: Bu videoda altyazı yok — önce AI ile altyazı oluşturmayı deneyin.
+    transcript:
+      tab: Altyazılar
+      failedTitle: Altyazılar yüklenemedi
+      retry: Tekrar dene
+      emptyTitle: Gösterilecek altyazı yok
+      backToCurrent: Şu ana dön
   loadingAiSubtitles: Yapay zeka altyazıları yükleniyor… (tahmini 3 dk)
   aiSubtitlesHint: Gelişmiş yapay zeka ses tanıma ile doğru altyazılar oluşturulur; resmi altyazı olmadığında da kullanılabilir.
   requestAiSubtitles: Yapay zeka altyazısı iste
   usingAiSubtitles: Yapay zeka altyazısı kullanılıyor
+  settings: Altyazı ayarları
   toggle:
     enabled: Altyazı çevirisi açık
     disabled: Altyazı çevirisi kapalı
   actions:
+    download: Altyazıları indir
     downloadTranslated: Çevrilmiş altyazıları indir
     downloadTranslatedPreparing: Altyazılar hazırlanıyor, uzun videolar daha uzun sürebilir
     downloadTranslatedTranslating: Altyazılar çevriliyor
@@ -1208,9 +1705,10 @@ subtitles:
     httpUnknown: HTTP hatası $1
     invalidResponse: YouTube altyazı yanıt biçimi geçersiz
     networkError: YouTube altyazılar alınırken ağ hatası oluştu.
-    fetchSubTimeout: YouTube altyazılar alınırken zaman aşımı oluştu.
+    fetchSubTimeout: Altyazılar alınırken zaman aşımı oluştu.
     buttonNotFound: Altyazı butonu bulunamadı
     noSubtitlesFound: Bu video için altyazı bulunmuyor
+    trackFileNotLoaded: Altyazılar yüklenemedi, lütfen sayfayı yenilemeyi deneyin
     videoNotFound: Video öğesi bulunamadı
     controlsBarNotFound: Kontrol çubuğu bulunamadı
     aiRateLimited: Çok fazla istek, lütfen daha sonra tekrar deneyin
@@ -1230,11 +1728,13 @@ subtitles:
     translatedExportIncomplete: Tüm altyazı satırları çevrilemedi
     translatedExportSameLanguage: Kaynak ve hedef diller aynı
 hostedAi:
-  ultraBadge:
-    tooltip: Ultra plan gerektirir · Planı almak için rozete tıklayın
+  planBadge:
+    pro: Pro veya Ultra plan gerektirir · Planı almak için rozete tıklayın
+    ultra: Ultra plan gerektirir · Planı almak için rozete tıklayın
   availability:
     authenticationRequired: Bu sağlayıcıyı kullanmak için giriş yapın
     ultraRequired: Ultra plan gerekli
+    proRequired: Pro veya Ultra plan gerekli
     quotaExhausted: Kota tükendi
     serviceUnavailable: Geçici olarak kullanılamıyor
     usedPercent: "Kota kullanımı: %$1"
@@ -1249,6 +1749,7 @@ hotkey:
   shift: Shift
   backtick: Ters tırnak
   clickAndHold: Tıkla ve basılı tut
+  custom: Özel kısayol
 translationHub:
   searchLanguages: Dil ara...
   noLanguagesFound: Dil bulunamadı
@@ -1260,6 +1761,8 @@ translationHub:
   translate: Çevir
   copiedToClipboard: Çeviri panoya kopyalandı!
   copyTranslation: Çeviriyi kopyala
+  speakSourceText: Kaynak metni seslendir
+  speakTranslation: Çeviriyi seslendir
   expandCard: Kartı genişlet
   collapseCard: Kartı daralt
   expandAllCards: Tümünü genişlet

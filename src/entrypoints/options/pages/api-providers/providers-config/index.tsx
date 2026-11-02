@@ -194,7 +194,7 @@ function ProviderCardList() {
           render={
             <Button
               variant="outline"
-              className="h-auto rounded-xl border-dashed border-accent-blue bg-accent-blue/8 p-3 hover:bg-accent-blue/14 dark:border-accent-blue dark:bg-accent-blue/12 dark:hover:bg-accent-blue/20"
+              className="h-auto rounded-xl border-dashed border-accent bg-accent/8 p-3 hover:bg-accent/14 dark:border-accent dark:bg-accent/12 dark:hover:bg-accent/20"
               onClick={() => setIsAddDialogOpen(true)}
             />
           }
@@ -314,7 +314,7 @@ function FeatureCountBadge({ count, children }: { count: number; children: React
   return (
     <div className="absolute -top-2 right-2 flex items-center justify-center gap-1">
       <Tooltip>
-        <TooltipTrigger render={<Badge className="cursor-default bg-blue-500" size="sm" />}>
+        <TooltipTrigger render={<Badge variant="accent" className="cursor-default" size="sm" />}>
           {i18n.t("options.apiProviders.badges.featureCount", [count])}
         </TooltipTrigger>
         <TooltipContent>
@@ -406,8 +406,8 @@ function BuiltInProviderPanel({ providerId }: { providerId: BuiltInAiProviderId 
   const { status } = useHostedAiStatus()
 
   // Both cards list every hosted-capable feature. Same policy as the provider
-  // dropdowns, and now literally the same predicate: the Ultra badge is the
-  // viewer-independent `requiresUltra` product fact; rows lock only on durable
+  // dropdowns, and now literally the same predicate: the plan badge is the
+  // plan this account lacks (`upgradeTo`); rows lock only on durable
   // account facts (sign-in, plan), never on transient service state (exhausted
   // quota, open circuit, unconfigured model) — those surface at run time. Fail
   // open while status is unknown so one failed fetch never locks the UI.
@@ -415,7 +415,7 @@ function BuiltInProviderPanel({ providerId }: { providerId: BuiltInAiProviderId 
     const tierStatus = getHostedAiTierStatus(status, feature, modelTier)
     return {
       disabled: isDurablyUnusableTier(tierStatus),
-      requiresUltra: tierStatus?.requiresUltra === true,
+      upgradeTo: tierStatus?.upgradeTo ?? undefined,
     }
   }
 

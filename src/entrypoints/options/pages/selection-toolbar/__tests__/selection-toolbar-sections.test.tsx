@@ -2,9 +2,11 @@
 
 import type { Config } from "@/types/config/config"
 import { fireEvent, render, screen } from "@testing-library/react"
+import { MemoryRouter } from "react-router"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
 import { ActionsSection } from "../actions"
+import { AnnotationSection } from "../annotation"
 import { DisplaySection } from "../display"
 import { EnableItem } from "../enable-item"
 
@@ -69,7 +71,12 @@ describe("selection toolbar page sections", () => {
   it("switches one built-in action at a time, leaving the other enabled", () => {
     const selectionToolbar = testState.selectionToolbar!
 
-    render(<ActionsSection />)
+    // Its rows link to their keys on the Shortcuts page.
+    render(
+      <MemoryRouter>
+        <ActionsSection />
+      </MemoryRouter>,
+    )
     const [translate, speak] = screen.getAllByRole("switch")
 
     fireEvent.click(speak!)
@@ -84,6 +91,25 @@ describe("selection toolbar page sections", () => {
     expect(translate).toBeChecked()
   })
 
+  it("switches the annotation slot, leaving the toolbar's other settings alone", () => {
+    const selectionToolbar = testState.selectionToolbar!
+
+    // Its row links to its key on the Shortcuts page.
+    render(
+      <MemoryRouter>
+        <AnnotationSection />
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getByRole("switch"))
+
+    expect(setSelectionToolbarMock).toHaveBeenCalledWith({
+      ...selectionToolbar,
+      annotation: { ...selectionToolbar.annotation, enabled: false },
+    })
+    // The provider row is the translate feature's own setting, shown here too.
+    expect(screen.getByText("ProviderSelector")).toBeInTheDocument()
+  })
+
   it("adds a disabled site without dropping the rest of the toolbar config", () => {
     const selectionToolbar = testState.selectionToolbar!
 
@@ -94,6 +120,8 @@ describe("selection toolbar page sections", () => {
 
     expect(setSelectionToolbarMock).toHaveBeenCalledWith({
       ...selectionToolbar,
+      // Stored exactly as typed: `example.com` is a pattern with a meaning of
+      // its own, and the list must say what the user wrote.
       disabledSelectionToolbarPatterns: [
         "example.com",
         ...selectionToolbar.disabledSelectionToolbarPatterns,

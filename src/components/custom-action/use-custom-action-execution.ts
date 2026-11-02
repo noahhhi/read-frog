@@ -1,0 +1,491 @@
+import type { LangCodeISO6393 } from "@read-frog/definitions"
+import type { JSONValue } from "ai"
+import type { RefObject } from "react"
+import type { SelectionToolbarInlineError } from "@/components/ui/selection-popover/inline-error"
+import type { FeatureProviderAnalytics, SurfaceByFeature } from "@/types/analytics"
+import type {
+  BackgroundStructuredObjectStreamSnapshot,
+  ThinkingSnapshot,
+} from "@/types/background-stream"
+import type { Config } from "@/types/config/config"
+import type { AISDKReasoning } from "@/types/config/provider"
+import type { SelectionToolbarCustomAction } from "@/types/config/selection-toolbar"
+import type { HostedAiModelTier } from "@/utils/constants/provider-ids"
+import type { CachedWebPageContext } from "@/utils/host/translate/webpage-context"
+import type { CustomActionProviderRef } from "@/utils/providers/provider-registry"
+
+export interface SelectionToolbarCustomActionRequestSlice {
+  language: Config["language"]
+  action: SelectionToolbarCustomAction | null
+  provider: CustomActionProviderRef | null
+}
+import { LANG_CODE_TO_EN_NAME } from "@read-frog/definitions"
+import { useEffect, useRef, useState } from "react"
+import {
+  createSelectionToolbarPrecheckError,
+  createSelectionToolbarRuntimeError,
+  isAbortError,
+} from "@/components/ui/selection-popover/inline-error"
+import { ANALYTICS_FEATURE } from "@/types/analytics"
+import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
+import { classifyFailureReason } from "@/utils/analytics-failure-reason"
+import { classifyResolvedProvider } from "@/utils/analytics-provider"
+import {
+  getModelOutputFields,
+  getSelectionOutputValues,
+  withSelectionOutputValues,
+} from "@/utils/constants/custom-action"
+import { streamBackgroundStructuredObject } from "@/utils/content-script/background-stream-client"
+import { getSourceDocumentTitle } from "@/utils/content/document-title"
+import { getRandomUUID } from "@/utils/crypto-polyfill"
+import { truncateContextTextForCustomAction } from "@/utils/custom-action-prompt"
+import {
+  buildSelectionToolbarCustomActionSystemPrompt,
+  replaceSelectionToolbarCustomActionPromptTokens,
+} from "@/utils/custom-action-prompt"
+import { getOrCreateWebPageContext } from "@/utils/host/translate/webpage-context"
+import { resolveModelId } from "@/utils/providers/model-id"
+import { getProviderOptionsWithOverride } from "@/utils/providers/options"
+import { getTopLevelReasoning } from "@/utils/providers/reasoning"
+
+export interface CustomActionExecutionContext {
+  action: SelectionToolbarCustomAction
+  provider: CustomActionProviderRef
+  // The target language the run asks for; promptTokens.targetLanguage names it.
+  targetCode: LangCodeISO6393
+  promptTokens: {
+    selection: string
+    paragraphs: string
+    targetLanguage: string
+    webTitle: string
+    webUrl: string
+    webContent: string
+  }
+}
+
+interface CustomActionExecutionPlan {
+  error: SelectionToolbarInlineError | null
+  executionContext: CustomActionExecutionContext | null
+}
+
+interface ResolvedWebPageContext {
+  popoverSessionKey: number
+  value: CachedWebPageContext | null
+}
+
+interface CustomActionExecutionRequest {
+  analytics: FeatureProviderAnalytics & {
+    actionId: string
+    actionName: string
+    surface: SurfaceByFeature["custom_ai_action"]
+  }
+  key: string
+  // Each selection field's value: the run's selection, put into every answer
+  // so the result shows it and "save to notebase" keeps it.
+  selectionValues: Record<string, string>
+  payload: {
+    outputSchema: Array<{
+      name: string
+      type: SelectionToolbarCustomAction["outputSchema"][number]["type"]
+    }>
+    prompt: string
+    providerId: string
+    modelTier?: HostedAiModelTier
+    providerOptions?: Record<string, Record<string, JSONValue>>
+    reasoning?: AISDKReasoning
+    instructions: string
+    temperature?: number
+  }
+}
+
+const FOLLOW_STREAM_BOTTOM_THRESHOLD = 8
+
+function scrollSelectionPopoverBodyToBottom(ref: RefObject<HTMLDivElement | null>) {
+  const node = ref.current
+  if (!node) {
+    return
+  }
+
+  // Measured before the chunk renders: a reader who scrolled up to reread
+  // earlier output must not be yanked back down, and measuring after the
+  // append would misread "was at the bottom" as "far from it" whenever a
+  // chunk adds more height than the threshold.
+  const distanceToBottom = node.scrollHeight - node.scrollTop - node.clientHeight
+  if (distanceToBottom > FOLLOW_STREAM_BOTTOM_THRESHOLD) {
+    return
+  }
+
+  requestAnimationFrame(() => {
+    if (ref.current) {
+      ref.current.scrollTop = ref.current.scrollHeight
+    }
+  })
+}
+
+function normalizeExecutionKeyValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeExecutionKeyValue)
+  }
+
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, nestedValue]) => nestedValue !== undefined)
+        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+        .map(([key, nestedValue]) => [key, normalizeExecutionKeyValue(nestedValue)]),
+    )
+  }
+
+  return value
+}
+
+function stringifyExecutionRequestKey(value: Record<string, unknown>) {
+  return JSON.stringify(normalizeExecutionKeyValue(value))
+}
+
+export function buildCustomActionExecutionPlan(
+  customActionRequest: SelectionToolbarCustomActionRequestSlice,
+  cleanSelection: string,
+  contextText: string,
+  webPageContext?: CachedWebPageContext | null,
+): CustomActionExecutionPlan {
+  const action = customActionRequest.action
+
+  if (!action) {
+    return {
+      error: createSelectionToolbarPrecheckError("customAction", "actionUnavailable"),
+      executionContext: null,
+    }
+  }
+
+  if (!cleanSelection) {
+    return {
+      error: createSelectionToolbarPrecheckError("customAction", "missingSelection"),
+      executionContext: null,
+    }
+  }
+
+  const provider = customActionRequest.provider
+  if (!provider) {
+    return {
+      error: createSelectionToolbarPrecheckError("customAction", "providerUnavailable"),
+      executionContext: null,
+    }
+  }
+
+  if (provider.kind === "local" && !provider.config.enabled) {
+    return {
+      error: createSelectionToolbarPrecheckError("customAction", "providerDisabled"),
+      executionContext: null,
+    }
+  }
+
+  if (webPageContext === undefined) {
+    return {
+      error: null,
+      executionContext: null,
+    }
+  }
+
+  return {
+    error: null,
+    executionContext: {
+      action,
+      provider,
+      targetCode: customActionRequest.language.targetCode,
+      promptTokens: {
+        selection: cleanSelection,
+        paragraphs: truncateContextTextForCustomAction(contextText || cleanSelection),
+        targetLanguage: LANG_CODE_TO_EN_NAME[customActionRequest.language.targetCode],
+        webTitle: webPageContext?.webTitle ?? getSourceDocumentTitle(),
+        webUrl: webPageContext?.url ?? window.location.href,
+        webContent: webPageContext?.webContent || "",
+      },
+    },
+  }
+}
+
+export function useCustomActionWebPageContext(open: boolean, popoverSessionKey: number) {
+  const [resolvedWebPageContext, setResolvedWebPageContext] =
+    useState<ResolvedWebPageContext | null>(null)
+
+  useEffect(() => {
+    if (!open) {
+      return undefined
+    }
+
+    let isCancelled = false
+
+    void getOrCreateWebPageContext()
+      .then((nextContext) => {
+        if (!isCancelled) {
+          setResolvedWebPageContext({
+            popoverSessionKey,
+            value: nextContext,
+          })
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setResolvedWebPageContext({
+            popoverSessionKey,
+            value: null,
+          })
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [open, popoverSessionKey])
+
+  if (!open || resolvedWebPageContext?.popoverSessionKey !== popoverSessionKey) {
+    return undefined
+  }
+
+  return resolvedWebPageContext.value
+}
+
+function buildCustomActionExecutionRequest({
+  analyticsSurface,
+  executionContext,
+  popoverSessionKey,
+  rerunNonce,
+}: {
+  analyticsSurface: SurfaceByFeature["custom_ai_action"]
+  executionContext: CustomActionExecutionContext
+  popoverSessionKey: number
+  rerunNonce: number
+}): CustomActionExecutionRequest {
+  const { action, provider, promptTokens } = executionContext
+  // A selection field is never asked of the model: neither its contract nor
+  // its schema names it.
+  const modelFields = getModelOutputFields(action.outputSchema)
+  const systemPrompt = buildSelectionToolbarCustomActionSystemPrompt(
+    action.systemPrompt,
+    promptTokens,
+    modelFields,
+  )
+  const prompt = replaceSelectionToolbarCustomActionPromptTokens(action.prompt, promptTokens)
+  const outputSchema = modelFields.map(({ name, type }) => ({ name, type }))
+  const providerKey = provider.kind === "local" ? provider.config.provider : provider.id
+  const model = provider.kind === "local" ? provider.config.model : undefined
+  const modelName = provider.kind === "local" ? (resolveModelId(provider.config.model) ?? "") : ""
+  const reasoning = provider.kind === "local" ? getTopLevelReasoning(provider.config) : undefined
+  const providerOptions =
+    provider.kind === "local"
+      ? getProviderOptionsWithOverride(
+          modelName,
+          provider.config.provider,
+          provider.config.providerOptions,
+          reasoning,
+        )
+      : undefined
+  const temperature = provider.kind === "local" ? provider.config.temperature : undefined
+
+  return {
+    analytics: {
+      actionId: action.id,
+      actionName: action.name,
+      surface: analyticsSurface,
+      ...classifyResolvedProvider(provider),
+    },
+    key: stringifyExecutionRequestKey({
+      actionId: action.id,
+      analyticsSurface,
+      model,
+      outputSchema: action.outputSchema.map(({ description, name, source, type }) => ({
+        description,
+        name,
+        source,
+        type,
+      })),
+      popoverSessionKey,
+      prompt,
+      promptTokens,
+      provider: providerKey,
+      providerId: provider.id,
+      providerOptions,
+      reasoning,
+      rerunNonce,
+      instructions: systemPrompt,
+      temperature,
+    }),
+    selectionValues: getSelectionOutputValues(action.outputSchema, promptTokens.selection),
+    payload: {
+      providerId: provider.id,
+      modelTier: provider.kind === "system" ? provider.modelTier : undefined,
+      instructions: systemPrompt,
+      prompt,
+      outputSchema,
+      providerOptions,
+      reasoning,
+      temperature,
+    },
+  }
+}
+
+export function useCustomActionExecution({
+  analyticsSurface,
+  bodyRef,
+  executionContext,
+  open,
+  popoverSessionKey,
+  rerunNonce,
+}: {
+  analyticsSurface: SurfaceByFeature["custom_ai_action"]
+  bodyRef: RefObject<HTMLDivElement | null>
+  executionContext: CustomActionExecutionContext | null
+  open: boolean
+  popoverSessionKey: number
+  rerunNonce: number
+}) {
+  const [isRunning, setIsRunning] = useState(false)
+  const [result, setResult] = useState<Record<string, unknown> | null>(null)
+  const [error, setError] = useState<SelectionToolbarInlineError | null>(null)
+  const [thinking, setThinking] = useState<ThinkingSnapshot | null>(null)
+  const lastRunKeyRef = useRef<string | null>(null)
+  const bodyRefRef = useRef(bodyRef)
+  // oxlint-disable-next-line react/refs -- latest-value ref: writing it during render is what keeps callbacks in sync
+  bodyRefRef.current = bodyRef
+  const executionRequest = executionContext
+    ? buildCustomActionExecutionRequest({
+        analyticsSurface,
+        executionContext,
+        popoverSessionKey,
+        rerunNonce,
+      })
+    : null
+  const executionRequestRef = useRef<CustomActionExecutionRequest | null>(null)
+  // oxlint-disable-next-line react/refs -- latest-value ref: writing it during render is what keeps callbacks in sync
+  executionRequestRef.current = executionRequest
+  const executionRequestKey = executionRequest?.key ?? null
+
+  const resetKey = `${popoverSessionKey}:${rerunNonce}`
+  const [appliedResetKey, setAppliedResetKey] = useState(resetKey)
+  if (appliedResetKey !== resetKey) {
+    setAppliedResetKey(resetKey)
+    setIsRunning(false)
+    setResult(null)
+    setError(null)
+    setThinking(null)
+  }
+
+  useEffect(() => {
+    if (!open || !executionRequestKey) {
+      return undefined
+    }
+
+    const request = executionRequestRef.current
+    if (!request || request.key !== executionRequestKey) {
+      return undefined
+    }
+
+    if (lastRunKeyRef.current === executionRequestKey) {
+      return undefined
+    }
+    lastRunKeyRef.current = executionRequestKey
+
+    let isCancelled = false
+    const abortController = new AbortController()
+
+    const analyticsContext = createFeatureUsageContext(
+      ANALYTICS_FEATURE.CUSTOM_AI_ACTION,
+      request.analytics.surface,
+    )
+    const actionAnalytics = {
+      action_id: request.analytics.actionId,
+      action_name: request.analytics.actionName,
+    }
+    const providerAnalytics: FeatureProviderAnalytics = {
+      provider: request.analytics.provider,
+      backend_kind: request.analytics.backend_kind,
+    }
+
+    const run = async () => {
+      setIsRunning(true)
+      setResult(null)
+      setError(null)
+      setThinking({
+        status: "thinking",
+        text: "",
+      })
+
+      try {
+        const finalResult = await streamBackgroundStructuredObject(
+          {
+            ...request.payload,
+            requestId: getRandomUUID(),
+          },
+          {
+            signal: abortController.signal,
+            onChunk: (partial: BackgroundStructuredObjectStreamSnapshot) => {
+              if (isCancelled) {
+                return
+              }
+
+              setResult(withSelectionOutputValues(partial.output, request.selectionValues))
+              setThinking(partial.thinking)
+              scrollSelectionPopoverBodyToBottom(bodyRefRef.current)
+            },
+          },
+        )
+
+        if (isCancelled) {
+          return
+        }
+
+        setResult(withSelectionOutputValues(finalResult.output, request.selectionValues))
+        setThinking(finalResult.thinking)
+        void trackFeatureUsed({
+          ...analyticsContext,
+          ...actionAnalytics,
+          ...providerAnalytics,
+          outcome: "success",
+        })
+      } catch (caughtError) {
+        if (isAbortError(caughtError)) {
+          return
+        }
+
+        if (isCancelled) {
+          return
+        }
+
+        setThinking((prev) => (prev?.text ? { ...prev, status: "complete" } : null))
+        setError(createSelectionToolbarRuntimeError("customAction", caughtError))
+        void trackFeatureUsed({
+          ...analyticsContext,
+          ...actionAnalytics,
+          ...providerAnalytics,
+          outcome: "failure",
+          failure_reason: classifyFailureReason(caughtError),
+        })
+      } finally {
+        if (!isCancelled) {
+          setIsRunning(false)
+        }
+      }
+    }
+
+    void run()
+
+    return () => {
+      isCancelled = true
+      abortController.abort()
+    }
+  }, [executionRequestKey, open])
+
+  useEffect(() => {
+    if (!open) {
+      lastRunKeyRef.current = null
+    }
+  }, [open])
+
+  return {
+    error,
+    isRunning,
+    result,
+    thinking,
+  }
+}

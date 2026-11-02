@@ -167,7 +167,10 @@ describe("translate-text", () => {
       const result = await translateTextForPage("test text")
 
       expect(result).toBe("")
-      expect(mockSendMessage).toHaveBeenCalledOnce()
+      // One TRANSLATION request; the page also asks for the glossary snapshot.
+      expect(
+        mockSendMessage.mock.calls.filter(([type]: [string]) => type === "enqueueTranslateRequest"),
+      ).toHaveLength(1)
     })
 
     it("returns a response containing the sentinel inside longer text verbatim", async () => {
@@ -426,6 +429,16 @@ describe("translate-text", () => {
   })
 
   describe("translateTextForInput", () => {
+    it("reports the resolved target used by the input request", async () => {
+      mockSendMessage.mockResolvedValue("translated input")
+      const onTargetLanguageResolved = vi.fn<(targetLanguage: string) => void>()
+
+      await translateTextForInput("hello", "eng", "cmn", onTargetLanguageResolved)
+
+      expect(onTargetLanguageResolved).toHaveBeenCalledOnce()
+      expect(onTargetLanguageResolved).toHaveBeenCalledWith("cmn")
+    })
+
     it("skips webpage context loading for non-llm input translations", async () => {
       mockSendMessage.mockResolvedValue("translated input")
 

@@ -4,7 +4,7 @@ import { isAPIProviderConfig, isPureAPIProvider } from "@/types/config/provider"
 import { i18n } from "@/utils/i18n"
 import { buildProviderConfigRoute, openOptionsPage } from "@/utils/navigation"
 
-const LINK_CLASS = "cursor-pointer text-blue-500 hover:underline"
+const LINK_CLASS = "cursor-pointer text-link hover:underline"
 
 /** Stands in for the link while the sentence is translated, then marks where to split it. */
 const LINK_SLOT = "\u0000"
@@ -45,7 +45,7 @@ export function SetApiKeyWarning({ providerConfig }: { providerConfig: ProviderC
     .split(LINK_SLOT)
 
   return (
-    <div className="border-warning-border rounded-md border bg-warning px-2 text-xs">
+    <div className="rounded-md border border-warning/30 bg-warning/10 px-2 text-xs">
       {before}
       {inRouterContext ? (
         <Link to={route} className={LINK_CLASS}>

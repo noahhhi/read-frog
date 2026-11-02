@@ -2,22 +2,31 @@ import type { SelectionToolbarCustomAction } from "@/types/config/selection-tool
 import type { CustomActionTemplate } from "@/utils/constants/custom-action-templates"
 import { Icon } from "@iconify/react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { useEffect, useMemo, useState } from "react"
-import { useLocation, useNavigate } from "react-router"
+import { useMemo, useState } from "react"
+import { useLocation } from "react-router"
 import { requestEditorNavigationAtom } from "@/components/form/autosave-navigation"
 import { SortableList } from "@/components/sortable-list"
 import { Button } from "@/components/ui/base-ui/button"
 import { Dialog, DialogTrigger } from "@/components/ui/base-ui/dialog"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
-import { BUILT_IN_DICTIONARY_ACTION_ID, DEFAULT_ACTION_NAME } from "@/utils/constants/custom-action"
-import { getBuiltInDictionaryAction, patchSelectionToolbarAction } from "@/utils/custom-actions"
+import {
+  BUILT_IN_DICTIONARY_ACTION_ID,
+  BUILT_IN_IMPROVE_WRITING_ACTION_ID,
+  BUILT_IN_SENTENCE_ANALYSIS_ACTION_ID,
+  DEFAULT_ACTION_NAME,
+} from "@/utils/constants/custom-action"
+import { getBuiltInActions, patchSelectionToolbarAction } from "@/utils/custom-actions"
 import { i18n } from "@/utils/i18n"
+import { createLayoutSampleData } from "@/utils/layout-host/sample"
 import { getUniqueName } from "@/utils/name"
+import { CUSTOM_ACTION_ADD_QUERY_PARAM } from "@/utils/navigation"
 import { getSelectableProvidersForCapability } from "@/utils/providers/provider-registry"
+import { setSelectionToolbarCustomActions } from "@/utils/selection-toolbar-items"
 import { EntityListItem } from "../../../components/entity-list-item"
 import { EntityListRail } from "../../../components/entity-list-rail"
-import { selectedCustomActionIdAtom } from "../atoms"
+import { customActionEditorTabAtom, selectedCustomActionIdAtom } from "../atoms"
 import { AddActionDialog } from "./add-action-dialog"
+import { RecentChangeBadge } from "./recent-change-badge"
 
 export function CustomActionCardList() {
   const [selectionToolbarConfig, setSelectionToolbarConfig] = useAtom(
@@ -25,31 +34,16 @@ export function CustomActionCardList() {
   )
   const requestNavigation = useSetAtom(requestEditorNavigationAtom)
   const setSelectedCustomActionId = useSetAtom(selectedCustomActionIdAtom)
+  const setEditorTab = useSetAtom(customActionEditorTabAtom)
   const providersConfig = useAtomValue(configFieldsAtomMap.providersConfig)
+  const { targetCode } = useAtomValue(configFieldsAtomMap.language)
   const { search } = useLocation()
-  const navigate = useNavigate()
-  const [dialogOpen, setDialogOpen] = useState(() => new URLSearchParams(search).has("addAction"))
+  // Read at mount only; `useCustomActionDeepLink` strips the param right after.
+  const [dialogOpen, setDialogOpen] = useState(() =>
+    new URLSearchParams(search).has(CUSTOM_ACTION_ADD_QUERY_PARAM),
+  )
   const customActions = selectionToolbarConfig.customActions
-  const builtInDictionary = getBuiltInDictionaryAction(selectionToolbarConfig)
-
-  useEffect(() => {
-    const params = new URLSearchParams(search)
-    const actionId = params.get("actionId")
-
-    if (
-      actionId === BUILT_IN_DICTIONARY_ACTION_ID ||
-      (actionId && customActions.some((action) => action.id === actionId))
-    ) {
-      void setSelectedCustomActionId(actionId)
-    }
-
-    if (params.has("addAction") || params.has("actionId")) {
-      params.delete("addAction")
-      params.delete("actionId")
-      const nextSearch = params.toString()
-      void navigate({ search: nextSearch ? `?${nextSearch}` : "" }, { replace: true })
-    }
-  }, [search, navigate, customActions, setSelectedCustomActionId])
+  const builtInActions = getBuiltInActions(selectionToolbarConfig)
 
   const customActionProviders = useMemo(
     () => getSelectableProvidersForCapability("customAction", providersConfig),
@@ -68,19 +62,22 @@ export function CustomActionCardList() {
           {
             ...newAction,
             name: getUniqueName(baseName, new Set(current.customActions.map((item) => item.name))),
+            sampleData: createLayoutSampleData(newAction.outputSchema, targetCode),
           },
         ],
       }))
+      setEditorTab("config")
       await setSelectedCustomActionId(newAction.id)
       setDialogOpen(false)
     })
   }
 
+  // The toolbar's order follows, so the selection toolbar and its menu list
+  // the actions the same way.
   const handleReorder = (newList: SelectionToolbarCustomAction[]) => {
-    void setSelectionToolbarConfig({
-      ...selectionToolbarConfig,
-      customActions: newList,
-    })
+    void setSelectionToolbarConfig(
+      setSelectionToolbarCustomActions(selectionToolbarConfig, newList),
+    )
   }
 
   return (
@@ -90,7 +87,7 @@ export function CustomActionCardList() {
           render={
             <Button
               variant="outline"
-              className="h-auto rounded-xl border-dashed border-accent-blue bg-accent-blue/8 p-3 hover:bg-accent-blue/14 dark:border-accent-blue dark:bg-accent-blue/12 dark:hover:bg-accent-blue/20"
+              className="h-auto rounded-xl border-dashed border-accent bg-accent/8 p-3 hover:bg-accent/14 dark:border-accent dark:bg-accent/12 dark:hover:bg-accent/20"
               disabled={customActionProviders.length === 0}
             >
               <div className="flex w-full items-center justify-center gap-2">
@@ -106,7 +103,7 @@ export function CustomActionCardList() {
       </Dialog>
 
       {customActionProviders.length === 0 && (
-        <div className="text-sm text-amber-600 dark:text-amber-400">
+        <div className="text-sm text-warning">
           {i18n.t("options.selectionToolbar.customActions.noEnabledLlmProvider")}
         </div>
       )}
@@ -126,23 +123,38 @@ export function CustomActionCardList() {
         <h3 className="px-1 text-xs font-medium text-muted-foreground">
           {i18n.t("options.selectionToolbar.customActions.builtIn" as never)}
         </h3>
-        <BuiltInDictionaryCard action={builtInDictionary} />
+        <div className="flex flex-col gap-4 pt-2">
+          {builtInActions.map((action) => (
+            <BuiltInActionCard key={action.id} action={action} />
+          ))}
+        </div>
       </section>
     </div>
   )
 }
 
-function BuiltInDictionaryCard({ action }: { action: SelectionToolbarCustomAction }) {
+function BuiltInActionCard({ action }: { action: SelectionToolbarCustomAction }) {
   const setSelectionToolbarConfig = useSetAtom(configFieldsAtomMap.selectionToolbar)
   const [selectedCustomActionId, setSelectedCustomActionId] = useAtom(selectedCustomActionIdAtom)
 
   return (
     <EntityListItem.Root
-      data-action-id={BUILT_IN_DICTIONARY_ACTION_ID}
+      data-action-id={action.id}
       selected={selectedCustomActionId === action.id}
       className={action.enabled === false ? "opacity-70" : undefined}
       onClick={() => setSelectedCustomActionId(action.id)}
     >
+      <EntityListItem.Badges>
+        {action.id === BUILT_IN_DICTIONARY_ACTION_ID && (
+          <RecentChangeBadge kind="updated" date="2026-10-02" />
+        )}
+        {action.id === BUILT_IN_SENTENCE_ANALYSIS_ACTION_ID && (
+          <RecentChangeBadge kind="new" date="2026-09-27" />
+        )}
+        {action.id === BUILT_IN_IMPROVE_WRITING_ACTION_ID && (
+          <RecentChangeBadge kind="new" date="2026-09-27" />
+        )}
+      </EntityListItem.Badges>
       <EntityListItem.Content>
         <EntityListItem.Identity>
           <Icon icon={action.icon} className="size-4 shrink-0 text-zinc-600 dark:text-zinc-300" />

@@ -11,7 +11,7 @@ import { cn } from "@/utils/styles/utils"
  * fluidfunctionalism.com/docs/card. Same anatomy as the plain `Card` next door (header,
  * title, description, action, content, footer), with a sibling `FluidCardGroup` that owns
  * layout — stacked list, inline rows, or grid — plus the magnetic proximity highlight that
- * previews where a click will land, the same one `Table` uses on its rows.
+ * previews where a click will land.
  *
  * Deliberately kept beside `card.tsx` rather than replacing it: the surface here is
  * transparent and borderless by default, leaning on hairline dividers and the highlight
@@ -173,11 +173,11 @@ function FluidCardGroup({
   const reduceMotion = useReducedMotion()
   // More than one column wraps into a grid, where the nearest item has to be resolved in
   // two dimensions; a single column is a plain vertical list.
-  const { activeIndex, itemRects, sessionRef, handlers, registerItem, measureItems } =
+  const { activeIndex, itemRects, session, handlers, registerItem, measureItems } =
     useProximityHover(containerRef, { axis: columns > 1 ? "xy" : "y" })
 
   // Assign each child a stable proximity index, so callers never thread one through by
-  // hand the way Table asks them to — here the group owns it.
+  // hand — the group owns it.
   const childArray = React.Children.toArray(children).filter(React.isValidElement)
   const count = childArray.length
   const indexed = childArray.map((child, index) =>
@@ -262,8 +262,7 @@ function FluidCardGroup({
         <AnimatePresence>
           {activeRect && (
             <motion.div
-              // oxlint-disable-next-line react/refs -- reading the session id during render is the point -- a new key mounts a fresh node with no geometry to animate from
-              key={sessionRef.current}
+              key={session}
               aria-hidden
               data-slot="fluid-card-highlight"
               className={cn("pointer-events-none absolute z-0 rounded-xl", HOVER_TINT)}
@@ -346,7 +345,7 @@ function FluidCard({
 
   // Divider geometry: draw a hairline toward the neighbour below and to the right, but
   // drop it next to the active *or* selected card so the highlight and the selection fill
-  // read clean — the same trick Table plays on its row borders.
+  // read clean.
   const self = index ?? -1
   const col = index === undefined ? 0 : index % columns
   const hasBelow = index !== undefined && index + columns < count
@@ -510,7 +509,7 @@ function FluidCard({
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="absolute top-2 right-2 z-30 flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors duration-[80ms] outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none"
+            className="absolute top-2 right-2 z-30 flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors duration-[80ms] outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none"
           >
             <IconX className="size-4 stroke-[1.5]" />
           </button>
@@ -809,8 +808,8 @@ type FluidCardButtonVariant = "primary" | "secondary" | "ghost" | "link"
 
 const FLUID_CARD_BUTTON_VARIANTS: Record<FluidCardButtonVariant, string> = {
   primary: "bg-foreground text-background hover:bg-foreground/90 active:bg-foreground/80",
-  secondary: "bg-accent text-foreground hover:bg-accent/80 active:bg-accent",
-  ghost: "text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent",
+  secondary: "bg-secondary text-foreground hover:bg-secondary/80 active:bg-secondary",
+  ghost: "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted",
   link: "text-foreground underline-offset-4 hover:underline px-0! h-auto!",
 }
 

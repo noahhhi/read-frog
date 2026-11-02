@@ -1,4 +1,8 @@
 import type { GeneratedI18nStructure } from "#i18n"
+import {
+  CUSTOM_ACTION_LAYOUT_SECTION_ID,
+  CUSTOM_ACTION_NOTEBASE_SECTION_ID,
+} from "@/utils/navigation"
 
 type I18nKey = keyof GeneratedI18nStructure
 
@@ -17,6 +21,21 @@ type SearchItemDefinition = Omit<SearchItem, "titleKey" | "descriptionKey" | "pa
 }
 
 export const SEARCH_ITEMS: SearchItem[] = [
+  // Advanced page
+  {
+    sectionId: "glossary-enabled",
+    route: "/advanced/glossary",
+    titleKey: "options.advanced.glossary.enable.title",
+    descriptionKey: "options.advanced.glossary.enable.description",
+    pageKey: "options.advanced.glossary.title",
+  },
+  {
+    sectionId: "glossary-library",
+    route: "/advanced/glossary",
+    titleKey: "options.advanced.glossary.library.title",
+    descriptionKey: "options.advanced.glossary.library.description",
+    pageKey: "options.advanced.glossary.title",
+  },
   // Preference page
   {
     // Titled with the section, so "appearance" still finds a row that reads "Theme".
@@ -122,6 +141,13 @@ export const SEARCH_ITEMS: SearchItem[] = [
     pageKey: "options.shortcuts.title",
   },
   {
+    sectionId: "selection-speak-shortcut",
+    route: "/shortcuts",
+    titleKey: "options.shortcuts.selectionSpeak.title",
+    descriptionKey: "options.shortcuts.selectionSpeak.description",
+    pageKey: "options.shortcuts.title",
+  },
+  {
     sectionId: "subtitles-toggle-shortcut",
     route: "/shortcuts",
     titleKey: "options.shortcuts.subtitlesToggle.title",
@@ -140,6 +166,13 @@ export const SEARCH_ITEMS: SearchItem[] = [
     route: "/shortcuts",
     titleKey: "options.shortcuts.translationHub.title",
     descriptionKey: "options.shortcuts.translationHub.description",
+    pageKey: "options.shortcuts.title",
+  },
+  {
+    sectionId: "selection-action-shortcuts",
+    route: "/shortcuts",
+    titleKey: "options.shortcuts.actions.title",
+    descriptionKey: "options.shortcuts.actions.description",
     pageKey: "options.shortcuts.title",
   },
 
@@ -181,6 +214,22 @@ export const SEARCH_ITEMS: SearchItem[] = [
     descriptionKey: "options.selectionToolbar.customActions.description",
     pageKey: "options.selectionToolbar.customActions.title",
   },
+  {
+    // The Layout heading in the Config tab; the scroll switches to that tab first.
+    sectionId: CUSTOM_ACTION_LAYOUT_SECTION_ID,
+    route: "/custom-actions",
+    titleKey: "options.selectionToolbar.customActions.form.layout.title",
+    descriptionKey: "options.selectionToolbar.customActions.form.layout.description",
+    pageKey: "options.selectionToolbar.customActions.title",
+  },
+  {
+    // The Notebase tab trigger itself; the scroll activates it.
+    sectionId: CUSTOM_ACTION_NOTEBASE_SECTION_ID,
+    route: "/custom-actions",
+    titleKey: "options.selectionToolbar.customActions.form.notebase.title",
+    descriptionKey: "options.selectionToolbar.customActions.form.notebase.description",
+    pageKey: "options.selectionToolbar.customActions.title",
+  },
 
   // Translation page
   {
@@ -195,6 +244,13 @@ export const SEARCH_ITEMS: SearchItem[] = [
     route: "/page-translation",
     titleKey: "options.translation.preference.translateRange.title",
     descriptionKey: "options.translation.preference.translateRange.description",
+    pageKey: "options.translation.title",
+  },
+  {
+    sectionId: "translate-title",
+    route: "/page-translation",
+    titleKey: "options.translation.preference.translateTitle.title",
+    descriptionKey: "options.translation.preference.translateTitle.description",
     pageKey: "options.translation.title",
   },
   {
@@ -365,6 +421,13 @@ export const SEARCH_ITEMS: SearchItem[] = [
     pageKey: "options.selectionToolbar.title",
   },
   {
+    sectionId: "selection-toolbar-annotation",
+    route: "/selection-toolbar",
+    titleKey: "options.selectionToolbar.annotation.title",
+    descriptionKey: "options.selectionToolbar.annotation.enable.description",
+    pageKey: "options.selectionToolbar.title",
+  },
+  {
     sectionId: "selection-toolbar-opacity",
     route: "/selection-toolbar",
     titleKey: "options.selectionToolbar.display.opacity.title",
@@ -428,8 +491,9 @@ export const SEARCH_ITEMS: SearchItem[] = [
     pageKey: "options.videoSubtitles.title",
   },
   {
+    // Its own page, drilled into from the Translate on open row of the Basics section.
     sectionId: "subtitles-auto-start",
-    route: "/video-subtitles",
+    route: "/video-subtitles/auto-start",
     titleKey: "options.videoSubtitles.preference.autoStart.title",
     descriptionKey: "options.videoSubtitles.preference.autoStart.description",
     pageKey: "options.videoSubtitles.title",

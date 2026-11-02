@@ -47,11 +47,21 @@ vi.mock("../output-schema-field", () => ({
   ReadOnlyOutputSchemaField: () => <div>ReadOnlyOutputSchemaField</div>,
 }))
 
+// The layout editor and preview (CodeMirror, shadow DOM) are verified in a browser.
+vi.mock("../layout-field", () => ({
+  LayoutField: () => <div>LayoutField</div>,
+  ReadOnlyLayoutField: () => <div>ReadOnlyLayoutField</div>,
+}))
+
 vi.mock("../notebase-connection-field", () => ({
   NotebaseConnectionField: () => (
     <div>{i18n.t("options.selectionToolbar.customActions.form.notebase.title")}</div>
   ),
 }))
+
+const AI_CONFIG_HELPER_TRIGGER = i18n.t(
+  "options.selectionToolbar.customActions.form.aiConfigHelper.trigger",
+)
 
 function seedConfig(store: ReturnType<typeof createStore>, config: SeedConfig) {
   void fakeBrowser.storage.local.set({ config })
@@ -91,6 +101,8 @@ describe("customActionConfigForm notebase availability", () => {
     expect(screen.getByText("IconField:readOnly")).toBeInTheDocument()
     expect(screen.queryByText("OutputSchemaField")).not.toBeInTheDocument()
     expect(screen.getByText("ReadOnlyOutputSchemaField")).toBeInTheDocument()
+    expect(screen.queryByText("LayoutField")).not.toBeInTheDocument()
+    expect(screen.getByText("ReadOnlyLayoutField")).toBeInTheDocument()
     expect(screen.getByText("ProviderField")).toBeInTheDocument()
     expect(
       screen.queryByText(i18n.t("options.selectionToolbar.customActions.form.delete")),
@@ -99,6 +111,7 @@ describe("customActionConfigForm notebase availability", () => {
     expect(
       screen.queryByRole("button", { name: i18n.t("options.apiProviders.form.duplicate") }),
     ).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: AI_CONFIG_HELPER_TRIGGER })).not.toBeInTheDocument()
 
     const customizeButton = screen.getByRole("button", {
       name: i18n.t("options.selectionToolbar.customActions.form.customize"),
@@ -201,9 +214,13 @@ describe("customActionConfigForm notebase availability", () => {
           name: "summary",
           type: "string" as const,
           description: "Summary",
-          speaking: false,
         },
       ],
+      sampleData: {
+        selection: "A long article",
+        targetCode: "eng" as const,
+        values: { "summary-field": "A short summary" },
+      },
       notebaseConnection: {
         notebaseId: "table-1",
         notebaseNameSnapshot: "Articles",
@@ -228,6 +245,7 @@ describe("customActionConfigForm notebase availability", () => {
 
     expect(screen.getByText("NameField:editable")).toBeInTheDocument()
     expect(screen.getByText("OutputSchemaField")).toBeInTheDocument()
+    expect(screen.getByText("LayoutField")).toBeInTheDocument()
     expect(
       screen.queryByRole("button", {
         name: i18n.t("options.selectionToolbar.customActions.form.customize"),
@@ -254,5 +272,49 @@ describe("customActionConfigForm notebase availability", () => {
     })
     expect(duplicate.id).not.toBe(action.id)
     expect(duplicate.notebaseConnection).not.toBe(action.notebaseConnection)
+    expect(duplicate.sampleData).not.toBe(action.sampleData)
+  })
+
+  it("copies a prompt carrying the custom action's current settings", async () => {
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
+
+    const store = createStore()
+    const config = cloneConfig(DEFAULT_CONFIG)
+    const action = {
+      id: "action-1",
+      name: "Summarize",
+      icon: "tabler:sparkles",
+      enabled: true,
+      providerId: config.selectionToolbar.builtInActions.dictionary.providerId,
+      systemPrompt: "You are helpful.",
+      prompt: "Summarize {{selection}}.",
+      outputSchema: [
+        { id: "summary-field", name: "summary", type: "string" as const, description: "" },
+      ],
+    }
+    config.selectionToolbar.customActions = [action, { ...action, id: "action-2", name: "Explain" }]
+    seedConfig(store, config)
+    void store.set(selectedCustomActionIdAtom, action.id)
+
+    render(
+      <Provider store={store}>
+        <CustomActionConfigForm />
+      </Provider>,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: AI_CONFIG_HELPER_TRIGGER }))
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: i18n.t("options.selectionToolbar.customActions.form.aiConfigHelper.copy"),
+      }),
+    )
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    const prompt = writeText.mock.calls[0]![0]
+    expect(prompt).toContain("**Name:** `Summarize`")
+    expect(prompt).toContain("```text\nSummarize {{selection}}.\n```")
+    expect(prompt).toContain("named `Explain`")
+    expect(await screen.findByRole("button", { name: i18n.t("action.copied") })).toBeInTheDocument()
   })
 })

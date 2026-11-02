@@ -5,9 +5,11 @@ import type {
   NotebaseRowCreateInput,
   NotebaseRowCreateManyInput,
 } from "@read-frog/api-contract"
+import type { AnalyticsFailureReason } from "@/types/analytics"
 import type { Config } from "@/types/config/config"
 import type { SelectionToolbarCustomActionNotebaseAccount } from "@/types/config/selection-toolbar"
 import type { GuideDictionaryNotebaseCompletionInput } from "@/utils/guide/dictionary-notebase"
+import type { NoteSaveCompletion } from "@/utils/note-save/analytics"
 import type {
   PendingConnectedNotebaseSave,
   PendingCreateNotebaseSave,
@@ -17,10 +19,14 @@ import type {
 import { AUTH_COOKIE_PATTERNS } from "@read-frog/definitions"
 import { browser } from "#imports"
 import { env } from "@/env"
+import { buildFeatureUsedEventProperties } from "@/utils/analytics"
+import { classifyFailureReason } from "@/utils/analytics-failure-reason"
 import { backgroundAuthClient } from "@/utils/auth/background-auth-client"
 import { getLocalConfig, setLocalConfig } from "@/utils/config/storage"
 import { patchSelectionToolbarAction } from "@/utils/custom-actions"
 import { logger } from "@/utils/logger"
+import { buildCustomActionOptionsRoute } from "@/utils/navigation"
+import { createNoteSaveCompletedEvent } from "@/utils/note-save/analytics"
 import {
   classifyConnectedNotebaseOwnership,
   createNotebaseConnectedAccountSnapshot,
@@ -42,11 +48,14 @@ import {
   doesSchemaMatchPendingColumns,
   getNotebaseDetailUrl,
   getPendingNotebaseSave,
+  getPendingNotebaseSaveContext,
+  getPendingNoteSaveAnalyticsSurface,
   isPendingNotebaseSaveExpired,
   validateStillCanSavePendingConnectedNotebaseSave,
   validateStillCanSavePendingCreateNotebaseSave,
 } from "@/utils/notebase/pending-save"
 import { backgroundOrpcClient } from "@/utils/orpc/background-client"
+import { captureFeatureUsedEventInBackground } from "./analytics"
 import { completeGuideDictionaryNotebaseAndNotify } from "./new-user-guide"
 
 interface PendingNotebaseSaveProcessorDeps {
@@ -56,19 +65,46 @@ interface PendingNotebaseSaveProcessorDeps {
   getConfig: () => Promise<Config | null>
   setConfig: (config: Config) => Promise<void>
   getAuthenticatedAccount: () => Promise<SelectionToolbarCustomActionNotebaseAccount | null>
-  createNotebase: (input: NotebaseCreateInput) => Promise<unknown>
-  createRow: (input: NotebaseRowCreateInput) => Promise<unknown>
-  createRows: (input: NotebaseRowCreateManyInput) => Promise<unknown>
+  createNotebase: (input: NotebaseCreateInput, noteSave: NoteSaveContext) => Promise<unknown>
+  createRow: (input: NotebaseRowCreateInput, noteSave: NoteSaveContext) => Promise<unknown>
+  createRows: (input: NotebaseRowCreateManyInput, noteSave: NoteSaveContext) => Promise<unknown>
   listNotebases: () => Promise<NotebaseListOutput>
   getSchema: (id: string) => Promise<NotebaseGetSchemaOutput>
   openNotebasePage: (notebaseId: string) => Promise<void>
   openActionOptions: (actionId: string) => Promise<void>
   completeGuideDictionaryNotebase: (input: GuideDictionaryNotebaseCompletionInput) => Promise<void>
+  reportNoteSave: (completion: NoteSaveCompletion) => void
   now: () => number
   log: Pick<typeof logger, "info" | "warn" | "error">
 }
 
 type PendingProcessingStatus = PendingNotebaseSaveActionStatus | "expired" | "missing_config"
+type NoteSaveContext = ReturnType<typeof getPendingNotebaseSaveContext>
+
+/**
+ * A pending save's final outcome, once it either reached the server or was
+ * dropped for an error retrying cannot fix. Saves kept for a retry report
+ * nothing yet, and an expired one never reports: that gap is the abandon rate.
+ */
+function reportPendingSaveOutcome(
+  deps: PendingNotebaseSaveProcessorDeps,
+  pendingNotebaseSave: PendingNotebaseSave,
+  error?: unknown,
+) {
+  const context = getPendingNotebaseSaveContext(pendingNotebaseSave)
+  deps.reportNoteSave({
+    surface: getPendingNoteSaveAnalyticsSurface(pendingNotebaseSave),
+    saveSource: context.surface,
+    isGuide: context.isGuide,
+    noteCount:
+      pendingNotebaseSave.kind === "create_notebase"
+        ? pendingNotebaseSave.rows.length
+        : pendingNotebaseSave.results.length,
+    path: "after_login",
+    startedAt: pendingNotebaseSave.createdAt,
+    ...(error === undefined ? {} : { failureReason: classifyFailureReason(error) }),
+  })
+}
 
 function isAuthCookieChange(cookie: { domain?: string; name: string }) {
   if (!cookie.domain) {
@@ -138,6 +174,8 @@ async function completePendingSave(
   })
   if (applied.status !== "valid" || !applied.config) {
     await deps.clearPendingNotebaseSave()
+    // The Notebase and its notes exist; only connecting the action failed.
+    reportPendingSaveOutcome(deps, pendingNotebaseSave)
     deps.log.info("[NotebasePendingSave] Cleared pending save before writing connection", {
       status: applied.status,
       pendingId: pendingNotebaseSave.id,
@@ -147,6 +185,7 @@ async function completePendingSave(
 
   await deps.setConfig(applied.config)
   await deps.clearPendingNotebaseSave()
+  reportPendingSaveOutcome(deps, pendingNotebaseSave)
   await completeGuideDictionaryNotebaseIfNeeded(
     deps,
     pendingNotebaseSave,
@@ -272,11 +311,16 @@ async function createReplacementNotebaseFromConnectedPending(
     deps.now(),
     {
       guideDictionaryNotebaseTracking: pendingNotebaseSave.guideDictionaryNotebaseTracking,
+      ...(pendingNotebaseSave.saveSource ? { saveSource: pendingNotebaseSave.saveSource } : {}),
+      analyticsSurface: pendingNotebaseSave.analyticsSurface,
     },
   )
 
   try {
-    await deps.createNotebase(buildNotebaseCreateInputFromPending(replacementPendingNotebaseSave))
+    await deps.createNotebase(
+      buildNotebaseCreateInputFromPending(replacementPendingNotebaseSave),
+      getPendingNotebaseSaveContext(pendingNotebaseSave),
+    )
   } catch (error) {
     if (isORPCUnauthorizedError(error)) {
       deps.log.info(
@@ -290,6 +334,7 @@ async function createReplacementNotebaseFromConnectedPending(
 
     if (shouldClearCreateError(error)) {
       await deps.clearPendingNotebaseSave()
+      reportPendingSaveOutcome(deps, pendingNotebaseSave, error)
       deps.log.warn(
         "[NotebasePendingSave] Cleared connected pending save after unrecoverable replacement create error",
         error,
@@ -322,6 +367,8 @@ async function createReplacementNotebaseFromConnectedPending(
   )
   if (applied.status !== "valid" || !applied.config) {
     await deps.clearPendingNotebaseSave()
+    // The replacement Notebase and its notes exist; only connecting the action failed.
+    reportPendingSaveOutcome(deps, pendingNotebaseSave)
     deps.log.info(
       "[NotebasePendingSave] Cleared connected pending save before writing replacement connection",
       {
@@ -334,6 +381,7 @@ async function createReplacementNotebaseFromConnectedPending(
 
   await deps.setConfig(applied.config)
   await deps.clearPendingNotebaseSave()
+  reportPendingSaveOutcome(deps, pendingNotebaseSave)
   await completeGuideDictionaryNotebaseIfNeeded(
     deps,
     replacementPendingNotebaseSave,
@@ -415,7 +463,10 @@ async function processCreatePendingSave(
   }
 
   try {
-    await deps.createNotebase(buildNotebaseCreateInputFromPending(pendingNotebaseSave))
+    await deps.createNotebase(
+      buildNotebaseCreateInputFromPending(pendingNotebaseSave),
+      getPendingNotebaseSaveContext(pendingNotebaseSave),
+    )
     await completePendingSave(deps, pendingNotebaseSave, connectedAccount)
   } catch (error) {
     if (isORPCUnauthorizedError(error)) {
@@ -427,6 +478,7 @@ async function processCreatePendingSave(
 
     if (shouldClearCreateError(error)) {
       await deps.clearPendingNotebaseSave()
+      reportPendingSaveOutcome(deps, pendingNotebaseSave, error)
       deps.log.warn(
         "[NotebasePendingSave] Cleared pending save after unrecoverable create error",
         error,
@@ -482,6 +534,7 @@ async function processConnectedPendingSave(
 
     if (isORPCForbiddenError(error)) {
       await deps.clearPendingNotebaseSave()
+      reportPendingSaveOutcome(deps, pendingNotebaseSave, error)
       deps.log.warn(
         "[NotebasePendingSave] Cleared connected pending save after Notebase list permission error",
         error,
@@ -532,6 +585,7 @@ async function processConnectedPendingSave(
 
     if (isORPCForbiddenError(error)) {
       await deps.clearPendingNotebaseSave()
+      reportPendingSaveOutcome(deps, pendingNotebaseSave, error)
       deps.log.warn(
         "[NotebasePendingSave] Cleared connected pending save after connected schema permission error",
         error,
@@ -564,8 +618,11 @@ async function processConnectedPendingSave(
     return
   }
 
+  // The current connection, not the snapshot: validation checked that its
+  // Notebase and mappings still match, and fields the reader set to "don't
+  // save" since the click must not be written back as undecided.
   const refreshedConnection = refreshNotebaseConnectionAccountSnapshot(
-    pendingNotebaseSave.connectionSnapshot,
+    validation.action.notebaseConnection ?? pendingNotebaseSave.connectionSnapshot,
     connectedAccount,
     schema.name,
   )
@@ -587,6 +644,10 @@ async function processConnectedPendingSave(
       pendingNotebaseSave,
       "[NotebasePendingSave] Cleared connected pending save with invalid mappings",
     )
+    // Dropped like the server's validation error below, which retrying cannot fix either.
+    reportPendingSaveOutcome(deps, pendingNotebaseSave, {
+      reason: "validation" satisfies AnalyticsFailureReason,
+    })
     return
   }
 
@@ -594,20 +655,27 @@ async function processConnectedPendingSave(
     (result) => buildNotebaseRowCells(actionWithRefreshedConnection, schema, result).cells,
   )
 
+  const noteSave = getPendingNotebaseSaveContext(pendingNotebaseSave)
   try {
     const [firstCells] = cellsList
     if (cellsList.length === 1 && firstCells) {
-      await deps.createRow({
-        notebaseId: refreshedConnection.notebaseId,
-        data: {
-          cells: firstCells,
+      await deps.createRow(
+        {
+          notebaseId: refreshedConnection.notebaseId,
+          data: {
+            cells: firstCells,
+          },
         },
-      })
+        noteSave,
+      )
     } else {
-      await deps.createRows({
-        notebaseId: refreshedConnection.notebaseId,
-        rows: cellsList.map((cells) => ({ cells })),
-      })
+      await deps.createRows(
+        {
+          notebaseId: refreshedConnection.notebaseId,
+          rows: cellsList.map((cells) => ({ cells })),
+        },
+        noteSave,
+      )
     }
   } catch (error) {
     if (isORPCUnauthorizedError(error)) {
@@ -631,6 +699,7 @@ async function processConnectedPendingSave(
 
     if (isORPCForbiddenError(error)) {
       await deps.clearPendingNotebaseSave()
+      reportPendingSaveOutcome(deps, pendingNotebaseSave, error)
       deps.log.warn(
         "[NotebasePendingSave] Cleared connected pending save after row permission error",
         error,
@@ -638,11 +707,14 @@ async function processConnectedPendingSave(
       return
     }
 
+    // The mappings were checked against a fresh schema just before the write,
+    // so a rejected cell is a value in the answer. Opening the mappings would
+    // send the reader to change a connection that works.
     if (isORPCValidationError(error)) {
-      await clearConnectedPendingAndOpenActionOptions(
-        deps,
-        pendingNotebaseSave,
-        "[NotebasePendingSave] Cleared connected pending save after row validation error",
+      await deps.clearPendingNotebaseSave()
+      reportPendingSaveOutcome(deps, pendingNotebaseSave, error)
+      deps.log.warn(
+        "[NotebasePendingSave] Cleared connected pending save after the server rejected a cell",
         error,
       )
       return
@@ -656,6 +728,7 @@ async function processConnectedPendingSave(
   }
 
   await deps.clearPendingNotebaseSave()
+  reportPendingSaveOutcome(deps, pendingNotebaseSave)
   await completeGuideDictionaryNotebaseIfNeeded(
     deps,
     pendingNotebaseSave,
@@ -714,12 +787,22 @@ export function setupNotebasePendingSaveProcessor(waitUntilReady: () => Promise<
     getConfig: getLocalConfig,
     setConfig: setLocalConfig,
     getAuthenticatedAccount,
-    createNotebase: (input) => backgroundOrpcClient.notebase.create(input),
-    createRow: (input) => backgroundOrpcClient.notebaseRow.create(input),
-    createRows: (input) => backgroundOrpcClient.notebaseRow.createMany(input),
+    createNotebase: (input, noteSave) =>
+      backgroundOrpcClient.notebase.create(input, { context: { analytics: noteSave } }),
+    createRow: (input, noteSave) =>
+      backgroundOrpcClient.notebaseRow.create(input, { context: { analytics: noteSave } }),
+    createRows: (input, noteSave) =>
+      backgroundOrpcClient.notebaseRow.createMany(input, { context: { analytics: noteSave } }),
     listNotebases: () => backgroundOrpcClient.notebase.list({}),
     getSchema: (id) => backgroundOrpcClient.notebase.getSchema({ id }),
     completeGuideDictionaryNotebase: completeGuideDictionaryNotebaseAndNotify,
+    reportNoteSave: (completion) => {
+      void captureFeatureUsedEventInBackground(
+        buildFeatureUsedEventProperties(createNoteSaveCompletedEvent(completion)),
+      ).catch((error) => {
+        logger.warn("[NotebasePendingSave] Failed to report the save outcome", error)
+      })
+    },
     openNotebasePage: async (notebaseId) => {
       await browser.tabs.create({
         active: true,
@@ -730,7 +813,7 @@ export function setupNotebasePendingSaveProcessor(waitUntilReady: () => Promise<
       await browser.tabs.create({
         active: true,
         url: browser.runtime.getURL(
-          `/options.html#/custom-actions?actionId=${encodeURIComponent(actionId)}`,
+          buildCustomActionOptionsRoute(actionId, { tab: "notebase", full: true }),
         ),
       })
     },

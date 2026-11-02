@@ -32,6 +32,11 @@ xcodebuild -project "$project_root/$app_name/$app_name.xcodeproj" \
   CURRENT_PROJECT_VERSION="${SAFARI_BUILD_NUMBER:-1}" \
   MACOSX_DEPLOYMENT_TARGET="${SAFARI_MACOS_TARGET:-14.0}" "${signing[@]}" build
 app_path="$PWD/.safari/DerivedData/Build/Products/Release/$app_name.app"
+resources="$app_path/Contents/PlugIns/$app_name Extension.appex/Contents/Resources"
+# The converter registers folders separately. Verify nested runtime chunks too.
+while IFS= read -r -d '' file; do
+  cmp ".output/safari-mv3/$file" "$resources/${file#./}"
+done < <(cd .output/safari-mv3 && find . -type f -print0)
 if [[ -n "${SAFARI_TEAM_ID:-}" ]]; then
   codesign --verify --deep --strict "$app_path"
 fi

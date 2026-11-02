@@ -1,12 +1,15 @@
 name: Read Frog
-extName: Read Frog - Traduce y aprende
-extDescription: Read Frog es una extensión de navegador de código abierto diseñada para ayudarte a aprender idiomas en profundidad desde cualquier sitio web.
+extName: "Read Frog - Traducción con IA y flashcards"
+extDescription: "Traducción bilingüe con IA para webs y subtítulos de YouTube, Netflix y X. Guarda palabras nuevas y repásalas con flashcards."
 uninstallSurveyUrl: https://tally.so/r/nPK6Ob
 account:
   login: Iniciar sesión
   webApp: Aplicación web
   logout: Cerrar sesión
   logoutError: No se pudo cerrar sesión. Inténtalo de nuevo.
+  grantAccess: Conceder acceso
+  grantAccessHint: Necesita acceso a readfrog.app
+  grantAccessError: No se pudo conceder el acceso. Inténtalo de nuevo.
 dataTypes:
   string: Texto
   number: Número
@@ -54,6 +57,11 @@ popup:
     notification: Novedades de Read Frog
   aiSmartContext: Contexto inteligente de IA
   aiSmartContextDescription: Usa el contexto de la página web para mejorar la calidad de la traducción. Requiere un proveedor de traducción LLM.
+  storeReview:
+    title: ¿Te gusta Read Frog?
+    description: Una reseña en la tienda ayuda a que otros lectores lo descubran.
+    action: Escribir una reseña
+    dismiss: Descartar
   more:
     title: Más
     help: Ayuda
@@ -103,9 +111,11 @@ options:
     toggle: Alternar barra lateral
     settings: Configuración
     features: Funciones
+    translation: Traducción
     product: Producto
   tools:
     translationHub: Centro de traducción
+    pdfTranslation: Traducción de PDF
   product:
     roadmap: Hoja de ruta
   helpAndCommunity:
@@ -148,6 +158,8 @@ options:
       resetsAt: "Se restablece el $1"
       daily: Cuota diaria
       weekly: Cuota semanal
+      oneTime: Crédito de regalo
+      expiresAt: "Caduca el $1"
       features:
         pageTranslation: Traducción de página
         customAction: Acciones de IA personalizadas
@@ -157,13 +169,13 @@ options:
         inputTranslation: Traducción de entrada
         languageDetection: Detección de idioma
     sponsorCta: Obtén IA rápida y rentable
-    sponsorCtaJalapenoCloud: Obtén un 50 % de descuento en GLM 5.2
+    sponsorCtaJalapenoCloud: Obtén un 50 % de descuento en GLM 5.3
     setApiKeyWarning:
       message: Configura tu clave de API en la página $1
     badges:
       featureCount: $1 funciones
       sponsor: Patrocinador
-      sponsorJalapenoCloud: $$2 gratis
+      sponsorJalapenoCloud: $$1 gratis
     dialog:
       title: Añadir nuevo proveedor
       groups:
@@ -243,7 +255,7 @@ options:
         customChatComplete: Personalizado Chat Complete
         customResponses: Personalizado Responses
       attribution:
-        builtInAi: Modelo estándar alojado por Read Frog. Los usuarios sin Ultra solo pueden usarlo en las acciones de IA personalizadas; los usuarios Ultra pueden usarlo en más funciones.
+        builtInAi: Modelo estándar alojado por Read Frog. Los usuarios Pro y Ultra pueden usarlo en todas las funciones con una cuota semanal; en el plan gratuito solo funciona en las acciones de IA personalizadas.
         builtInAiAdvance: Modelo avanzado alojado por Read Frog, exclusivo para miembros Ultra. Funciona en todas las funciones de IA integrada — traducción de página, acciones de IA personalizadas y más — con una cuota semanal compartida. Consume la cuota más rápido que el modelo estándar.
       description:
         openai: Proporciona modelos como GPT-4o
@@ -272,7 +284,6 @@ options:
         cerebras: Inferencia AI ultrarrápida para traducción y análisis de texto rápidos
         replicate: Acceso a diversos modelos de código abierto para tareas de traducción especializadas
         perplexity: AI mejorada con conocimiento en tiempo real para traducciones contextuales y asistencia de lectura
-        vercel: Modelos AI optimizados para traducción y análisis de contenido web
         volcengine: Plataforma cloud AI de ByteDance que ofrece modelos Doubao para traducción y lectura
         minimax: Plataforma MiniMax AI que ofrece modelos avanzados MiniMax-M2 para generación de texto
         alibaba: Serie de modelos Qwen de Alibaba Cloud con razonamiento avanzado y capacidades multilingües
@@ -291,6 +302,7 @@ options:
     featureProviders:
       title: Proveedores de funciones
       description: Elige qué proveedor usar para cada función
+      chooseProvider: Elegir un proveedor
       features:
         pageTranslation: Traducción de página
         selectionTranslation: Traducción de la barra de selección
@@ -299,7 +311,7 @@ options:
         noteSuggestion: Sugerencias de notas
       descriptions:
         pageTranslation: Traduce la página completa en modo bilingüe o de reemplazo.
-        selectionTranslation: Traduce el texto que seleccionas desde la barra de selección.
+        selectionTranslation: "Traduce el texto que seleccionas; también da el significado de las anotaciones."
         inputTranslation: Traduce lo que escribes en un campo de texto antes de enviarlo.
         videoSubtitles: Traduce los subtítulos que aparecen en el reproductor de video.
         noteSuggestion: Sugiere palabras que vale la pena guardar en tu Notebase después de traducir una selección.
@@ -325,6 +337,8 @@ options:
       llmProviderNotConfigured: No se seleccionó ningún proveedor LLM para $1
   patterns:
     duplicate: Este patrón ya está en la lista
+    gluedWildcard: Un "*" debe sustituir una parte completa de la dirección, como *.example.com o example.*
+    unsupported: Read Frog no puede hacer coincidir esta dirección. No se admiten los puertos ni los esquemas distintos de http y https.
   preference:
     title: Preferencias
     pageDescription: Define la apariencia de Read Frog, dónde se ejecuta y cómo se sincroniza y respalda tu configuración.
@@ -365,16 +379,17 @@ options:
       title: Configuración
       googleDrive:
         title: Sincronización cloud con Google Drive
-        description: Descarga la configuración cuando la remota es más reciente, sube la configuración cuando la local es más reciente
+        description: Descarga la configuración cuando la remota es más reciente, sube la configuración cuando la local es más reciente. Tus glosarios viajan en un archivo propio y se fusionan término a término en vez de reemplazarse.
         sync: Sincronizar con Google Drive
         syncing: Sincronizando...
         syncSuccess:
           uploaded: Configuración local subida a la nube
           downloaded: Configuración remota aplicada
-          sameChanges: Mismos cambios en ambos lados, sincronizado
-          noChange: Ya está sincronizado
-          unresolved: Conflictos resueltos y sincronizados
-        syncError: Error de sincronización, inténtalo de nuevo
+          sameChanges: Los mismos cambios de configuración en ambos lados, sincronizado
+          noChange: La configuración ya está sincronizada
+          unresolved: Conflictos de configuración resueltos y sincronizados
+        syncError: Error al sincronizar la configuración, inténtalo de nuevo
+        accountChangedError: La cuenta de Google conectada cambió mientras el diálogo estaba abierto. No se subió nada; vuelve a sincronizar.
         metadataCorrupted: Metadatos de sincronización dañados, configuración remota aplicada
         lastSyncTime: Última sincronización a las
         logout: Cerrar sesión
@@ -410,14 +425,50 @@ options:
             title: La configuración combinada tiene errores de validación.
             description: "Ajusta las diferencias siguientes para corregir:"
           moreErrors: ...y $1 errores más
+        glossary:
+          thisDevice: Este dispositivo
+          cloud: Nube
+          deleted: Eliminado
+          disabled: desactivado
+          upToDate: Los glosarios ya están sincronizados
+          uploaded: Glosarios subidos a la nube
+          merged: "Glosarios sincronizados: $1 añadidos, $2 actualizados, $3 eliminados"
+          undo: Deshacer
+          undone: Glosarios restaurados a como estaban antes de la sincronización
+          undoUnavailable: "Esa acción ya no se puede deshacer: tus glosarios han cambiado desde entonces."
+          retry: El glosario cambió durante la sincronización. Vuelve a ejecutarla.
+          accountChangedRetry: La cuenta de Google conectada cambió mientras el diálogo estaba abierto. No se subió nada; vuelve a sincronizar.
+          busy: Otra pestaña está sincronizando tus glosarios ahora mismo.
+          malformed: No se pudo leer el archivo de glosarios de tu Drive, así que no se cambió nada.
+          versionTooNew: Ese archivo de glosarios lo escribió una versión más reciente de Read Frog. Actualiza la extensión primero.
+          duplicateFiles: Tu Drive tiene más de un archivo de glosarios. No se cambió nada - elimina el sobrante.
+          capExceeded: "La fusión superaría el límite de glosarios en $1. No se cambió nada."
+          failed: Falló la sincronización de glosarios
+          review:
+            title: Revisa esta sincronización de glosarios
+            description: Elige qué conservar donde las dos copias no coinciden.
+            firstSync: "Primera sincronización en este dispositivo: $1 llegan de la nube, $2 se suben."
+            accountChanged: "Has iniciado sesión como $1, que no es la cuenta con la que este dispositivo se sincronizó por última vez. Sus $2 filas de glosario se subirán a esta cuenta. Para quedarte solo con los glosarios de esta cuenta, cancela, borra los de aquí y sincroniza de nuevo."
+            destructive: "Esta sincronización elimina $1 de las $2 filas de glosario de este dispositivo."
+            moreConflicts: "Hay $1 diferencias más que no se muestran. Cada una conserva la elección de la fusión."
+            confirm: Sincronizar
+            cancel: Cancelar
       manualSync:
         title: Sincronización manual de configuración
-        description: Importa y exporta manualmente tus ajustes de configuración
+        description: Importa y exporta tu configuración manualmente, con tus glosarios incluidos
         import: Importar
         export: Exportar
         importSuccess: Configuración importada correctamente
         exportSuccess: Configuración exportada correctamente
+        exportGlossaryFailed: Se exportó tu configuración, pero no se pudieron leer tus glosarios y no están en el archivo.
         importError: Error al importar
+        glossaryImported: "Se importaron $1 términos, sustituyendo los glosarios que tenías."
+        glossaryUndo: Deshacer
+        glossaryUndone: Tus glosarios volvieron a como estaban antes de la importación
+        glossaryUndoUnavailable: "Esa acción ya no se puede deshacer: tus glosarios han cambiado desde entonces."
+        glossaryMalformed: No se pudieron leer los glosarios de ese archivo. No se cambió nada.
+        glossaryVersionTooNew: Los glosarios de ese archivo los escribió una versión más reciente de Read Frog. Actualiza la extensión primero.
+        glossaryCapExceeded: "Ese archivo tiene $1 filas de glosario más que el límite de $2. No se cambió nada."
         exportOptions:
           title: Seleccionar opciones de exportación
           description: Elige si incluir claves API en la configuración exportada. Incluir claves API puede filtrar información sensible, por lo que se recomienda usarlo solo en entornos seguros.
@@ -456,13 +507,13 @@ options:
           confirm: Eliminar
       reset:
         title: Restablecer configuración
-        description: Restablecer toda la configuración al valor predeterminado
+        description: Restablecer toda la configuración a sus valores por defecto. Tus glosarios no se ven afectados.
         dialog:
           title: Restablecer configuración
           trigger: Restablecer configuración
           confirm: Confirmar
           cancel: Cancelar
-          description: Esta operación borrará todas tus configuraciones personalizadas y las restablecerá a los valores predeterminados. Confirma para continuar.
+          description: Esta operación borrará toda tu configuración personalizada y la restablecerá a los valores por defecto. Tus glosarios se conservan; elimínalos desde la página de glosarios. Confirma, por favor.
     userExperience:
       title: Experiencia de usuario
       beta:
@@ -474,7 +525,7 @@ options:
         description: Mejora Read Frog ayudándonos a localizar errores, pulir la interfaz y más
   shortcuts:
     title: Atajos
-    pageDescription: Define las teclas que activan la traducción mientras lees.
+    pageDescription: Define las teclas que traducen, leen en voz alta y ejecutan acciones AI mientras lees.
     setShortcut: Configurar atajo
     pageTranslation:
       title: Traducción de la página
@@ -489,11 +540,25 @@ options:
       title: Traducción de subtítulos
       description: Activa o desactiva los subtítulos traducidos del vídeo.
     nodeTranslation:
-      title: Traducción de párrafo
+      title: Traducción al pasar el cursor
       description: Pasa el cursor o mantén pulsado un párrafo para traducir solo ese.
+      customDescription: Pulsa estas teclas con el cursor sobre un párrafo para traducirlo.
     translationHub:
       title: Centro de traducción
       description: Abre el Centro de traducción en una pestaña nueva.
+    selectionSpeak:
+      title: "Leer la selección en voz alta"
+      description: "Lee en voz alta el texto seleccionado. Vuelve a pulsar para detener."
+    selectionAnnotation:
+      title: "Anotar"
+      description: "Subraya el texto seleccionado y escribe su significado entre las líneas."
+    actions:
+      title: "Acciones AI"
+      description: "Ejecuta una acción AI sobre el texto seleccionado. Las acciones personalizadas no tienen atajo hasta que les asignes uno aquí."
+    turnedOff: "Está desactivado, así que este atajo no hace nada hasta que lo vuelvas a activar."
+    turnOn: "Activar"
+    clash: "Mismo atajo que «$1». Cambia uno de ellos."
+    taken: "«$2» ya usa $1."
   overlayTools:
     title: Herramientas superpuestas
   inputTranslation:
@@ -559,6 +624,14 @@ options:
     enable:
       title: Activar barra de selección
       description: Muestra la barra de herramientas al seleccionar texto en páginas web para traducción rápida, voz y acciones AI
+    annotation:
+      title: "Anotación de palabras"
+      enable:
+        title: "Activar"
+        description: "Subraya la palabra o frase seleccionada y escribe su significado entre las líneas"
+      provider:
+        title: "Proveedor"
+        description: "Genera el significado; es el mismo ajuste que Traducir"
     actions:
       title: Acciones
       translate:
@@ -596,18 +669,33 @@ options:
       providerUnavailable: El proveedor seleccionado no está disponible
     customActions:
       title: Acciones AI personalizadas
-      pageDescription: Escribe tus propios prompts y ejecútalos sobre el texto seleccionado desde la barra de selección.
+      pageDescription: Escribe tus propios prompts y ejecútalos sobre el texto seleccionado desde la barra de selección. Los datos, el estilo y la interacción de cada resultado son totalmente personalizables.
       description: Añade tus propias acciones AI estructuradas para texto seleccionado
       configTitle: Configuración de acciones
+      introVideo:
+        trigger: "Ver vídeo"
+        title: "Acciones AI personalizadas en 30 segundos"
       builtIn: Integrada
       add: Añadir acción AI
       edit: Editar acción AI
       empty: Aún no hay acciones AI personalizadas
       noEnabledLlmProvider: Activa al menos un proveedor LLM antes de crear acciones AI personalizadas
+      tabs:
+        config: Configuración
+        notebase: Notebase
+        hasErrors: Hay errores
+        connected: Conectado
+        needsAttention: Requiere atención
       form:
         name: Nombre
         customize: Personalizar
         customizeTooltip: Las instrucciones integradas no permiten cambiar los prompts. Haz clic aquí para crear una copia editable y modificar los prompts.
+        aiConfigHelper:
+          trigger: "Configurar con IA"
+          title: "Configurar con IA"
+          description: "Copia el prompt de abajo y pégalo en tu asistente de IA (ChatGPT, Claude, DeepSeek, Kimi…). Primero te preguntará qué quieres y luego te dirá qué poner en cada ajuste. El prompt incluye la configuración actual de esta acción, pero no las claves de API."
+          copy: "Copiar prompt"
+          copyFailed: "No se pudo copiar el prompt. Inténtalo de nuevo."
         icon: Icono
         iconField:
           chooseAriaLabel: Elegir icono
@@ -629,12 +717,13 @@ options:
         fieldType: Tipo de campo
         fieldDescription: Descripción
         fieldDescriptionPlaceholder: Describe qué debe contener este campo...
-        fieldSpeaking: Activar lectura en voz alta
         actions: Acciones
         cancel: Cancelar
         save: Guardar
         defaultFieldName: Resultado
         fieldNamePlaceholder: Nombre del campo
+        selectionField: "Texto seleccionado"
+        selectionFieldDescription: "El texto que seleccionaste, guardado tal cual. La IA no lo escribe."
         autoFieldPrefix: Campo
         addFieldDialog:
           title: Añadir campo de salida
@@ -646,6 +735,69 @@ options:
           description: Este campo de salida se eliminará.
           confirm: Eliminar
           cancel: Cancelar
+        layout:
+          title: Diseño
+          description: Cómo se muestra el resultado en la ventana emergente. HTML con Liquid; los campos se rellenan a medida que llega la respuesta.
+          reset: Restaurar predeterminado
+          resetFieldList: Lista de campos
+          resetDictionary: Tarjeta de diccionario
+          resetSentenceAnalysis: Tarjeta de análisis de oraciones
+          resetImproveWriting: "Tarjeta de mejora de escritura"
+          resetConfirmTitle: ¿Reemplazar este diseño?
+          resetConfirmDescription: Se reemplazará el contenido del editor. Después aún podrás deshacerlo en el editor.
+          resetConfirm: Reemplazar
+          edit: Editar
+          preview: Vista previa
+          width: Ancho
+          themeLight: Claro
+          themeDark: Oscuro
+          replay: Reproducir
+          sampleData: Datos de ejemplo
+          sampleDataHint: Solo se usan en esta vista previa y nunca se guardan.
+          sampleDataSavedHint: Solo se usan en esta vista previa y se guardan con esta instrucción.
+          sampleDataReset: Restablecer ejemplos
+          sampleSelection: Texto seleccionado
+          sampleTargetLanguage: Idioma de destino
+          insertField: Campo
+          insertSpeak: Botón de lectura
+          insertCondition: Si tiene valor
+          insertContext: Contexto
+          insertLoop: Todos los campos
+          syntaxHelp: Sintaxis
+          builtInHint: El diseño de una acción integrada no se puede editar. Personalízala para editar una copia.
+          viewSource: Ver código
+          emptyNotice: Este diseño está vacío, así que la ventana emergente muestra la lista de campos predeterminada.
+          fallbackBanner: Este diseño no se puede mostrar, así que se usa el diseño predeterminado. $1
+          sanitized: "Eliminado por seguridad: $1"
+          unusedFields: "No aparecen en este diseño:"
+          tooLong: Un diseño puede tener como máximo $1 caracteres.
+          renameSkipped: El diseño aún hace referencia a «$1». Actualízalo a mano.
+          reservedName: «ctx» y «forloop» están reservados en los diseños. Elige otro nombre.
+          help:
+            output: Muestra el valor de un campo. El HTML del valor se escapa.
+            condition: Muestra el contenido solo cuando el campo tiene un valor.
+            loop: Se repite para cada campo, en orden. Puedes usar f.name, f.value y f.type.
+            speak: Cualquier elemento con data-speak lee en voz alta el valor (o su propio texto si el valor está vacío) cuando la respuesta termina.
+            speakLang: data-speak-lang indica el idioma de lectura (un código como es o en-US) para usar la voz de ese idioma. Sin él, el idioma se detecta, algo que suele fallar con una sola palabra.
+            speakAutoplay: Un elemento con data-speak-autoplay se lee en voz alta por sí solo cuando la respuesta termina. Solo suena el primero.
+            status: Aplica estilos según el estado. El data-status del contenedor es streaming, done o error.
+            filters: newline_to_br conserva los saltos de línea (úsalo al final); lines divide el texto en una lista de líneas.
+            styles: El CSS de un bloque <style> solo se aplica dentro de este resultado. Los colores --rf-* siguen los temas claro y oscuro.
+          lint:
+            parseError: "Error de sintaxis de Liquid: $1"
+            unknownField: No hay ningún campo llamado «$1».
+            unknownContextKey: "ctx no tiene «$1». Disponibles: $2."
+            fieldShadowedByLocal: Este diseño asigna «$1», lo que oculta el campo con ese nombre.
+            liquidInStyle: Liquid no se ejecuta dentro de <style>; esto se conserva como texto.
+            styleInConditional: Un bloque <style> siempre se aplica, aunque esté dentro de una etiqueta «$1».
+            cssImport: "@import se elimina. Los diseños no pueden cargar estilos externos."
+            cssFontFace: "@font-face se elimina. Usa fuentes que ya estén en el dispositivo."
+            unquotedAttributeOutput: Pon comillas alrededor de este valor de atributo, o el valor podría salirse de él.
+            filterIgnored: Los filtros se ignoran en una etiqueta «$1». Asigna primero el valor filtrado.
+            newlineToBrNotLast: newline_to_br solo funciona como último filtro de una salida.
+            tooLong: Este diseño supera los $1 caracteres y no se puede guardar.
+            fieldNotShown: «$1» no aparece en este diseño.
+            reservedFieldName: El nombre de campo «$1» está reservado en los diseños. Cambia el nombre del campo.
         notebase:
           title: Conexión de Notebase
           description: Guarda los resultados estructurados de esta acción en una Notebase remota.
@@ -677,16 +829,16 @@ options:
           schemaErrorDescription: Intenta actualizar el esquema de nuevo en un momento.
           schemaLoading: Cargando esquema de la Notebase...
           mappingsLabel: Asignaciones de campos
-          mappingsEmpty: Aún no hay asignaciones. Añade una cuando estés listo para guardar campos.
-          addMappingAction: Añadir asignación
-          removeMappingAction: Eliminar asignación
           localFieldLabel: Campo de acción
-          localFieldPlaceholder: Selecciona un campo de acción
           remoteFieldLabel: Campo de Notebase
-          remoteFieldPlaceholder: Selecciona un campo de Notebase
           columnUnavailableOption: eliminado
           invalidMappingsTitle: Algunas asignaciones requieren atención
           invalidMappingsDescription: Las asignaciones no válidas se conservan. Corrígelas antes de guardar en Notebase.
+          noFieldSavedTitle: "Ningún campo se guarda en esta Notebase"
+          noFieldSavedDescription: "Elige un campo de Notebase para al menos un campo y así poder guardar notas."
+          mappingSummary: "Se guardan $1 · Omitidos $2 · Sin decidir $3"
+          skipFieldOption: "No guardar"
+          undecidedFieldPlaceholder: "Elige un campo de Notebase o no guardar"
           mappingMissingLocal: El campo de acción asignado ya no existe.
           mappingMissingRemote: El campo de Notebase asignado ya no existe.
           mappingMissingSchema: Actualiza el esquema de la Notebase para validar esta asignación.
@@ -696,6 +848,7 @@ options:
           paragraphs: Texto de párrafos intersectados unido con líneas en blanco, truncado a los primeros 2000 caracteres cuando se envía a acciones AI personalizadas
           targetLanguage: Idioma de destino del usuario
           webTitle: Título de la página web
+          webUrl: URL completa de la página actual
           webContent: Contenido de la página web extraído de la página actual, truncado a los primeros 2000 caracteres
         delete: Eliminar
         deleteDialog:
@@ -726,6 +879,15 @@ options:
             8. Dificultad debe ser un nivel CEFR (A1, A2, B1, B2, C1 o C2).
             9. Si un campo es desconocido, devuelve una cadena vacía en lugar de adivinar.
             10. Responde en {{targetLanguage}} para todos los campos textuales, salvo que se requiera texto en la forma de origen para mayor claridad.
+            11. Término en la oración marca dónde está el término seleccionado dentro de Oración. Es una CADENA que contiene un arreglo JSON compacto de elementos {"text": ...}, cada uno citando Oración carácter por carácter, p. ej. [{"text":"blossoms"}]. Si Oración divide el término en partes separadas (p. ej. "anrufen" en "Er ruft seine Mutter an"), da un elemento por parte, en orden: [{"text":"ruft"},{"text":"an"}]. Escapa correctamente las comillas internas.
+            12. Trucos para recordar ayuda al estudiante a recordar el propio término seleccionado (en su idioma, no su traducción), como lo haría un buen profesor con este término en concreto. Da hasta 3 trucos, uno por línea, el más útil primero. Escribe solo trucos que de verdad ayuden; mejor menos que uno flojo, y si nada ayuda de verdad, devuelve una cadena vacía en lugar de forzar uno. Cada línea es una sola técnica: empiézala con el nombre de la técnica y dos puntos, ambos en {{targetLanguage}}. Parte de cómo está formado el término y luego añade lo que de verdad ayude:
+               - Formación: sus partes con significado (raíz, prefijo, sufijo o las palabras de un compuesto) y cómo se combinan para dar el significado.
+               - Caracteres: para un término escrito con caracteres chinos (chino, palabras japonesas en kanji, palabras coreanas de origen chino), qué significa cada carácter o qué componentes tiene un carácter.
+               - Origen: de dónde viene, o una palabra relacionada que el estudiante probablemente conozca (un cognado, un préstamo, los mismos caracteres en otro idioma).
+               - Sinónimo / Antónimo: un sinónimo cercano y en qué se diferencia, o un antónimo.
+               - Parónimo: una palabra que se escribe o suena parecido, y cómo distinguirlas.
+               - Colocación: una expresión habitual en la que se usa, que conviene aprender como bloque.
+               Omite las técnicas que no encajen y no escribas ninguna línea para decir que una no aplica. Cada truco debe enseñar algo que la Definición no dice: no repitas el significado con otras palabras, no vuelvas a contar la Oración ni expliques la forma flexionada. Afirma solo lo que sepas con certeza: nunca inventes una etimología, una raíz ni un componente de un carácter. Omite las historias de origen discutidas o que son mitos, aunque las presentes solo como una forma divertida de recordar (sincere no viene de «sin cera» y posh no es un acrónimo). Divide una palabra en partes o caracteres solo cuando de verdad forman su significado; palabras como 犹豫 o 葡萄 son una unidad, así que usa otra técnica con ellas. Nada de juegos de palabras por parecido sonoro en ningún idioma ni de partir una palabra en palabras sin relación.
 
             ## Ejemplos
 
@@ -737,8 +899,12 @@ options:
             - Fonética: /ˈblɒs.əm/
             - Categoría gramatical: noun
             - Oración: The ephemeral beauty of cherry blossoms reminds us to cherish each moment.
+            - Término en la oración: [{"text":"blossoms"}]
             - Definición: 花；花朵（尤指果树的花）
             - Traducción de la oración: 樱花短暂的美丽提醒我们珍惜每一刻。
+            - Trucos para recordar:
+              词源：和 bloom（开花）同源，bl- 开头的 bloom、blossom 都和开花有关
+              近义词：bloom 多指花开的状态，blossom 常指果树（樱桃、苹果）的花
             - Dificultad: B2
 
             ### Ejemplo 2
@@ -749,8 +915,12 @@ options:
             - Fonética: kandou
             - Categoría gramatical: noun
             - Oración: この映画はつまらないと思ったけど、最後は感動した。
+            - Término en la oración: [{"text":"感動"}]
             - Definición: Being deeply moved; emotional touch
             - Traducción de la oración: I thought this movie was boring, but the ending was moving.
+            - Trucos para recordar:
+              Characters: 感 (feel) + 動 (move): your feelings are moved.
+              Collocation: 感動する = to be moved; 感動的 = moving, touching.
             - Dificultad: B1
           prompt: |-
             ## Entrada
@@ -765,59 +935,119 @@ options:
           fieldPartOfSpeechDescription: Categoría gramatical (p. ej., noun, verb, adjective).
           fieldSentence: Oración
           fieldSentenceDescription: La oración completa de los párrafos anteriores que contiene el término seleccionado. No incluyas las oraciones anteriores ni posteriores.
+          fieldSentenceTerm: Término en la oración
+          fieldSentenceTermDescription: 'Dónde está el término seleccionado dentro de Oración: un arreglo JSON serializado como cadena, con un elemento {"text": cadena} por cada parte del término, cada uno citando Oración exactamente (p. ej. [{"text":"blossoms"}]).'
           fieldDefinition: Definición
           fieldDefinitionDescription: Una definición concisa para el sentido contextual.
           fieldSentenceTranslation: Traducción de la oración
           fieldSentenceTranslationDescription: La traducción únicamente de la Oración.
+          fieldMemoryTips: "Trucos para recordar"
+          fieldMemoryTipsDescription: "Formas de recordar el término: hasta 3 trucos, uno por línea, cada uno empieza con su técnica y dos puntos (p. ej., Formación: …); una cadena vacía si nada ayuda de verdad."
           fieldDifficulty: Dificultad
           fieldDifficultyDescription: Nivel de dificultad CEFR estimado A1, A2, B1, B2, C1 o C2.
+        sentenceAnalysis:
+          name: "Análisis de oraciones"
+          description: "Marca una oración larga como un profesor: su núcleo, cada cláusula y lo que la hace difícil"
+          fieldSentence: "Oración"
+          fieldAnnotations: "Anotaciones"
+          fieldTranslation: "Traducción"
+          roles:
+            subject: "Sujeto"
+            predicate: "Predicado"
+            object: "Objeto"
+            complement: "Complemento"
+            attributive: "Atributivo"
+            adverbial: "Adverbial"
+            appositive: "Aposición"
+            connector: "Conector"
+          clauses:
+            subject: "Cláusula sujeto"
+            object: "Cláusula objeto"
+            complement: "Cláusula complemento"
+            attributive: "Cláusula de relativo"
+            adverbial: "Cláusula adverbial"
+            appositive: "Cláusula apositiva"
+            clause: "Cláusula"
+          adverbialClauses:
+            time: "Cláusula temporal"
+            place: "Cláusula de lugar"
+            cause: "Cláusula causal"
+            condition: "Cláusula condicional"
+            concession: "Cláusula concesiva"
+            purpose: "Cláusula final"
+            result: "Cláusula consecutiva"
+            manner: "Cláusula modal"
+            comparison: "Cláusula comparativa"
+          forms:
+            infinitive: "Infinitivo"
+            gerund: "Gerundio"
+            presentParticiple: "-ing"
+            pastParticiple: "Participio"
+          senses:
+            time: "Tiempo"
+            place: "Lugar"
+            cause: "Causa"
+            condition: "Condición"
+            concession: "Concesión"
+            purpose: "Finalidad"
+            result: "Resultado"
+            manner: "Modo"
+            comparison: "Comparación"
+          obstacles:
+            inversion: "Inversión"
+            fronting: "Anteposición"
+            ellipsis: "Elipsis"
+            passive: "Pasiva"
+            subjunctive: "Subjuntivo"
+            parenthesis: "Inciso"
+            dummyIt: "Sujeto formal"
+            postponedSubject: "Sujeto real"
+            cleft: "Escindida"
+            comparison: "Comparación"
+            negation: "Negación"
+            split: "Separado"
+            idiom: "Modismo"
+          restoreLabel: "Orden normal:"
+          hardLabel: "Difícil"
+          trunkLabel: "Esqueleto"
+          slashesLabel: "Pausas"
         improveWriting:
-          name: Mejorar escritura
-          description: Analiza errores de escritura y sugiere mejoras
-          systemPrompt: |-
-            Eres un asistente de escritura para estudiantes de idiomas.
-
-            ## Objetivo
-            Dado un texto seleccionado y sus párrafos circundantes, analiza problemas de escritura y produce una versión mejorada.
-
-            ## Política de idioma (crítica)
-            1. Detecta el idioma original de Selección como {{originLanguage}}.
-            2. El campo "Análisis de errores" debe escribirse en {{targetLanguage}}.
-            3. El campo "Versión mejorada" debe mantenerse en {{originLanguage}}.
-            4. Nunca traduzcas "Versión mejorada" a {{targetLanguage}} a menos que {{originLanguage}} ya sea {{targetLanguage}}.
-
-            ## Reglas de escritura
-            1. Identifica errores de gramática, ortografía, puntuación y elección de palabras.
-            2. Mantén las ediciones naturales y conserva la intención y el tono del autor.
-            3. Si no hay errores importantes, indícalo claramente en "Análisis de errores" y devuelve una "Versión mejorada" ligeramente pulida.
-            4. Mantén "Versión mejorada" concisa y directamente utilizable.
-
-            ## Ejemplos
-            Ejemplo A:
-            - Selección: "He go to school yesterday, and he don't finish his homework."
-            - {{originLanguage}} detectado: inglés
-            - {{targetLanguage}}: chino
-            - Análisis de errores (chino — {{targetLanguage}}): 存在主谓一致和时态错误：go 应改为 went，don't 应改为 didn't，finish 应改为 finish 的过去时语境搭配。
-            - Versión mejorada (inglés — {{originLanguage}}): He went to school yesterday, and he didn't finish his homework.
-
-            Ejemplo B:
-            - Selección: "昨日私は友達に会いて、一緒に映画を見るました。"
-            - {{originLanguage}} detectado: japonés
-            - {{targetLanguage}}: inglés
-            - Análisis de errores (inglés — {{targetLanguage}}): There are verb conjugation errors: "会いて" should be "会って" (te-form of 会う), and "見るました" should be "見ました" (past tense of 見る in masu-form).
-            - Versión mejorada (japonés — {{originLanguage}}): 昨日私は友達に会って、一緒に映画を見ました。
+          name: "Mejorar escritura"
+          description: "Marca errores y expresiones poco naturales como un profesor, y los corrige según la situación"
+          fieldOriginal: "Versión original"
+          fieldSetting: "Contexto"
+          fieldAnnotations: "Anotaciones"
+          fieldImproved: "Versión mejorada"
+          fieldSummary: "Resumen"
+          types:
+            spelling: "Ortografía"
+            grammar: "Gramática"
+            punctuation: "Puntuación"
+            wordChoice: "Léxico"
+            logic: "Lógica"
+            unnatural: "Poco natural"
+            register: "Registro"
+            clarity: "Claridad"
+            good: "Acierto"
+          tiers:
+            error: "Error"
+            awkward: "Mejorable"
+            good: "Acierto"
+          hideFixesLabel: "Ocultar correcciones"
+          hiddenHintLabel: "Primero intenta corregirlo tú."
+          showImprovedLabel: "Mostrar versión mejorada"
+          improvedLabel: "Versión mejorada"
+          copyLabel: "Copiar"
+          unchangedLabel: "No hay nada que cambiar"
+          removeLabel: "eliminar"
+        blank:
+          name: En blanco
+          description: Empieza desde cero con una acción vacía
           prompt: |-
             ## Entrada
             Selección: {{selection}}
             Párrafos: {{paragraphs}}
             Idioma de destino: {{targetLanguage}}
-          fieldErrorAnalysis: Análisis de errores
-          fieldErrorAnalysisDescription: Explica problemas de gramática, ortografía, puntuación y elección de palabras en {{targetLanguage}}.
-          fieldImprovedVersion: Versión mejorada
-          fieldImprovedVersionDescription: Versión corregida y mejorada del texto seleccionado en su idioma original.
-        blank:
-          name: En blanco
-          description: Empieza desde cero con una acción vacía
       errors:
         nameRequired: El nombre es obligatorio
         duplicateName: 'Nombre de acción duplicado "$1"'
@@ -826,6 +1056,115 @@ options:
         outputSchemaRequired: Añade al menos un campo de salida
         fieldKeyRequired: El nombre del campo es obligatorio
         duplicateFieldKey: Los nombres de campo deben ser únicos
+  advanced:
+    title: Avanzado
+    pageDescription: Ajustes potentes que no forman parte del uso diario.
+    glossary:
+      title: Glosario
+      pageDescription: Da una traducción fija a las palabras que te importan y elige dónde se aplica cada lista.
+      untitled: Glosario sin título
+      noGlossaries: Aún no hay glosarios.
+      enable:
+        title: Activar
+        description: Envía los términos coincidentes al LLM para que los traduzca a tu manera. El glosario viaja dentro del prompt, así que solo se aplica a las funciones que usan un proveedor LLM.
+      library:
+        title: Tus glosarios
+        description: Cada glosario tiene sus propios términos y su propia lista de sitios web, así que un conjunto de términos para el trabajo no te acompaña en todo lo demás.
+        button: Añadir un glosario
+        capReached: "Puedes tener como máximo $1 glosarios."
+        termUsage: "$1 de $2 términos usados entre todos tus glosarios"
+      summary:
+        terms: "$1 términos"
+        termsOne: 1 término
+        allSites: Todos los sitios web
+        sites: "$1 sitios web"
+        sitesOne: 1 sitio web
+      editor:
+        docsLink: ¿Cómo funciona?
+        sections:
+          terms: Términos
+          maintenance: Copia de seguridad y eliminación
+        details:
+          title: Nombre y descripción
+          descriptionPlaceholder: Descripción (opcional)
+        enable:
+          title: Activar
+          description: Un glosario desactivado conserva sus términos, pero no envía ninguno.
+        sites:
+          title: Sitios web
+          description: Limita este glosario a determinados sitios web. example.com es solo esa dirección; *.example.com añade subdominios; example.com/docs/* acota a una parte del sitio.
+          allSites: Déjalo vacío y el glosario se aplicará en todas partes.
+          header: Sitio web
+        delete:
+          title: Eliminar este glosario
+          description: Elimina el glosario y todos los términos que contiene. Expórtalo primero si crees que vas a necesitar los términos — esto no se puede deshacer.
+          dialog:
+            trigger: Eliminar
+            title: ¿Eliminar este glosario?
+            description: "Se eliminarán permanentemente el glosario y los $1 términos que contiene. Esta acción no se puede deshacer."
+            confirm: Eliminar
+            cancel: Cancelar
+      addTerm:
+        title: Añadir un término
+        description: Dale a un término la traducción que quieras, o déjala vacía para conservar el original.
+      list:
+        title: Tus términos
+        description: Solo se envían los términos que aparecen en un párrafo.
+      importExport:
+        title: Importar y exportar
+        description: "Los términos son un CSV con las columnas source, target, targetLanguage y caseSensitive: el archivo que escribe Exportar."
+      sourcePlaceholder: Término
+      targetPlaceholder: Traducción (déjala vacía para conservar el original)
+      caseSensitive: Distinguir mayúsculas
+      add: Añadir
+      searchPlaceholder: Buscar términos
+      columnEnabled: Activado
+      columnSource: Término
+      columnTarget: Traducción
+      columnTargetLanguage: Idioma de destino
+      allLanguages: Todos los idiomas
+      toggleTerm: "Usar $1"
+      editTerm: "Editar $1"
+      keepOriginal: Conservar el original
+      delete: Eliminar
+      save: Guardar
+      cancel: Cancelar
+      loading: Cargando...
+      empty: Aún no hay términos. Añade uno arriba o importa un archivo CSV.
+      noMatches: Ningún término coincide con tu búsqueda.
+      previous: Anterior
+      next: Siguiente
+      pageOf: "$1 / $2"
+      addError:
+        emptySource: Escribe primero un término.
+        tooLong: Ese término es demasiado largo.
+        capReached: "Entre todos tus glosarios has alcanzado el límite de $1 términos."
+        duplicate: Ese término ya está en tu glosario.
+      import: Importar
+      export: Exportar
+      importModeMerge: Añadir a la lista
+      importModeReplace: Reemplazar la lista
+      importEmpty: No se encontraron términos en ese archivo.
+      importMissingHeader: "Ese archivo no es una exportación de glosario de Read Frog. Necesita estas columnas:"
+      importOverflow: "Esa importación superaría el límite en $1 términos. No se ha cambiado nada."
+      importSuccess: "Se han importado $1 términos nuevos y actualizado $2."
+      importSkipped: "Se han omitido $1 filas no válidas y $2 duplicados."
+      importNoValidRows: No se pudo importar ninguna de esas filas. No se cambió nada.
+      importReplaceConfirm:
+        title: "¿Reemplazar toda la lista?"
+        description: "Se eliminarán los $1 términos de este glosario —en todos los idiomas de destino, no solo en el seleccionado— y se reemplazarán por el contenido de este archivo. Esta acción no se puede deshacer."
+        confirm: Reemplazar
+        cancel: Cancelar
+      deleteAll:
+        title: Eliminar todos los términos
+        description: Vacía tu glosario. Expórtalo primero si crees que vas a necesitar los términos — eliminarlos no se puede deshacer.
+        deleting: Eliminando...
+        dialog:
+          title: Eliminar todos los términos
+          trigger: Eliminar todo
+          confirm: Confirmar
+          cancel: Cancelar
+          description: "Se eliminarán permanentemente los $1 términos. Esta acción no se puede deshacer."
   contextMenu:
     title: Menú contextual
     pageDescription: Controla las opciones de Read Frog en el menú contextual del navegador.
@@ -852,6 +1191,9 @@ options:
         range:
           main: Contenido principal
           all: Todo el contenido
+      translateTitle:
+        title: Traducir el título de la pestaña
+        description: Traduce también el título de la página que se muestra en la pestaña del navegador. Desactívalo para conservar el título original.
     hoverTranslation:
       title: Traducción al pasar el cursor
       enable:
@@ -906,6 +1248,8 @@ options:
       managePrompts: Gestionar prompts
       communityPrompts: Obtener o compartir prompts de la comunidad
       communityPromptsUrl: https://github.com/mengxi-ream/read-frog/discussions/821
+      variableReference: Referencia de variables
+      variableReferenceUrl: https://readfrog.app/es/docs/page-translation/prompts/variables
       addPrompt: Añadir Prompt
       default: Predeterminado
       builtIn: Integrado
@@ -1069,13 +1413,16 @@ options:
       title: Aspectos básicos
       enable:
         title: Activar subtítulos de video
-        description: Añade un botón de traducción a los controles del reproductor. Por ahora solo funciona en YouTube.
+        description: Añade un botón de traducción a los controles del reproductor en YouTube, X y Netflix.
       autoStart:
         title: Traducir al abrir el video
         description: Empieza a traducir en cuanto se carga el video, sin pulsar el botón.
       aiSegmentation:
         title: Segmentación inteligente de IA
-        description: La IA vuelve a cortar los subtítulos en líneas que se leen como frases. También fija sus tiempos, así que pueden desajustarse. Requiere un proveedor de traducción LLM.
+        description: La IA vuelve a cortar los subtítulos en frases. Las traducciones tardan más. Requiere un LLM potente; los modelos más débiles pueden omitir o desalinear líneas.
+      wordLookupAction:
+        title: Acción al buscar una palabra
+        description: La acción de IA que responde al hacer clic en una palabra de los subtítulos. Diccionario, salvo que elijas una tuya.
     aiQuota:
       title: Cuota de subtítulos con IA
       description: El reconocimiento de voz con IA te da subtítulos precisos para cualquier vídeo
@@ -1185,6 +1532,9 @@ options:
           description: Esto eliminará todos los resultados de segmentación AI en caché. La próxima vez que reproduzcas un video con segmentación AI activada, se volverán a procesar los subtítulos.
   whatsNew:
     title: Novedades
+    postType:
+      promotion: Promoción
+      update: Actualización
   rateUs:
     title: Calificarnos
   configMigration:
@@ -1225,7 +1575,22 @@ translation:
   sameLanguage: Los idiomas de origen y destino deben ser diferentes
   autoModeSameLanguage: El idioma detectado '$1' es el mismo que el idioma de destino
   extensionContextInvalidated: La extensión se actualizó. Actualiza esta página e inténtalo de nuevo.
+annotation:
+  annotate: "Anotar"
+  enterMode: "Modo de anotación"
+  exitMode: "Salir del modo de anotación"
+  modeLabel: "Modo de anotación"
+  noTextSelected: "No hay texto seleccionado"
+  tooLong: "Selecciona una palabra o una frase corta para anotarla"
+  multipleParagraphs: "Selecciona texto dentro de un solo párrafo para anotarlo"
+  translatedTextUnsupported: "El texto traducido no se puede anotar"
+  unsupportedPlace: "Este texto no se puede anotar aquí"
+  markOnly: "Marcado. No hay espacio entre estas líneas para su significado."
+  failed: "No se pudo obtener el significado"
+  remove: "Quitar anotación"
 speak:
+  languageDetectionFallback: Se usa la detección local de idioma
+  languageDetectionSettingsHint: En Ajustes, elige un LLM disponible o la detección local.
   fetchingAudio: Generando audio...
   playingAudio: Reproduciendo audio...
   failedToGenerateSpeech: No se pudo generar voz
@@ -1238,6 +1603,7 @@ action:
   regenerate: Regenerar
   viewContextDetails: Contexto
   customizeCustomAction: Personalizar la acción $1
+  customActionLayoutFallback: Este resultado no se puede mostrar con su diseño, así que se muestra una vista simplificada.
   saveToNotebase: Guardar en Notebase
   saveToNotebaseSaving: Guardando...
   saveToNotebaseSuccess: Guardado en Notebase
@@ -1247,6 +1613,10 @@ action:
   saveToNotebaseLimitExceeded: Se requiere una mejora para guardar más notas de Notebase
   saveToNotebaseTableUnavailable: La Notebase seleccionada ya no está disponible
   saveToNotebaseConnectionInvalid: Esta conexión de Notebase está desactualizada. Actualízala en Acciones AI personalizadas y corrige las asignaciones.
+  saveToNotebaseInvalidContent: "La respuesta de la IA tiene un valor con un formato incorrecto, así que no se guardó. Vuelve a ejecutar la acción y luego guarda."
+  saveToNotebaseNoFieldSaved: "No se guardó: esta acción no guarda ningún campo en la Notebase. Elige al menos uno en su configuración."
+  saveToNotebaseUndecidedTitle: "Guardado. Aún no has decidido si guardar estos campos"
+  saveToNotebaseSkipUndecided: "No guardarlos"
   saveToNotebaseNoMappings: Añade al menos una asignación válida antes de guardar
   saveToNotebaseCreateTitle: ¿Crear una Notebase?
   saveToNotebaseCreateDescription: Crea una Notebase con columnas que coinciden con esta acción personalizada y guarda este resultado como la primera nota.
@@ -1268,11 +1638,18 @@ action:
   updatePayment: Actualizar pago
   openCustomActions: Abrir Custom AI Actions
   openNotebase: Abrir Notebase
+  reviewDueOne: "$1 tarjeta por repasar"
+  reviewDueOther: "$1 tarjetas por repasar"
   contextDetailsTitleLabel: Título
   contextDetailsParagraphsLabel: Párrafos
   translation: Traducción
   speak: Leer en voz alta
   playing: Reproduciendo
+  moreActions: Más acciones
+  pinToToolbar: Fijar en la barra
+  unpinFromToolbar: Quitar de la barra
+  dragToReorder: Arrastra para reordenar
+  addCustomAction: Añadir acción AI personalizada
 noteSuggestion:
   title: Quizás quieras guardar
   description: Elige qué palabras guardar en tu Notebase y repásalas cuando quieras.
@@ -1289,24 +1666,33 @@ shortcutKeySelector:
   placeholder: Introduce el atajo
 subtitles:
   sidebar:
-    close: Cerrar el resumen de IA
+    close: Cerrar el panel de aprendizaje
+    needsSubtitles: "Este video no tiene subtítulos: prueba a generarlos con IA primero."
     menu:
-      label: Resumen de IA
+      label: Aprendizaje
     summary:
+      tab: Resumen de IA
       generating: Generando el resumen…
       failedTitle: No se pudo generar
       retry: Reintentar
       needsModel: Elige un modelo LLM para los subtítulos y así resumir este video.
       openSettings: Abrir ajustes
-      needsSubtitles: "Este video no tiene subtítulos: prueba a generarlos con IA primero."
+    transcript:
+      tab: Subtítulos
+      failedTitle: No se pudieron cargar los subtítulos
+      retry: Reintentar
+      emptyTitle: No hay subtítulos que mostrar
+      backToCurrent: Volver al actual
   loadingAiSubtitles: Cargando subtítulos con IA… (estimado 3 min)
   aiSubtitlesHint: Subtítulos precisos generados por reconocimiento de voz con IA avanzada, disponibles incluso sin subtítulos oficiales.
   requestAiSubtitles: Solicitar subtítulos con IA
   usingAiSubtitles: Usando subtítulos con IA
+  settings: Ajustes de subtítulos
   toggle:
     enabled: Traducción de subtítulos activada
     disabled: Traducción de subtítulos desactivada
   actions:
+    download: Descargar subtítulos
     downloadTranslated: Descargar subtítulos traducidos
     downloadTranslatedPreparing: Preparando subtítulos, los videos largos pueden tardar más
     downloadTranslatedTranslating: Traduciendo subtítulos
@@ -1324,9 +1710,10 @@ subtitles:
     httpUnknown: Error HTTP $1
     invalidResponse: Formato de respuesta de subtítulos de Youtube no válido
     networkError: Se produjo un error de red al obtener subtítulos
-    fetchSubTimeout: Se agotó el tiempo al obtener subtítulos de youtube
+    fetchSubTimeout: Se agotó el tiempo al obtener subtítulos
     buttonNotFound: Botón de subtítulos no encontrado
     noSubtitlesFound: No hay subtítulos disponibles para este video
+    trackFileNotLoaded: No se pudieron cargar los subtítulos; intenta actualizar la página
     videoNotFound: Elemento de video no encontrado
     controlsBarNotFound: Barra de controles no encontrada
     aiRateLimited: Demasiadas solicitudes, inténtalo de nuevo más tarde
@@ -1346,11 +1733,13 @@ subtitles:
     translatedExportIncomplete: No se pudieron traducir todas las líneas de subtítulos
     translatedExportSameLanguage: El idioma de origen y el de destino son iguales
 hostedAi:
-  ultraBadge:
-    tooltip: Requiere el plan Ultra · Haz clic en la insignia para obtenerlo
+  planBadge:
+    pro: Requiere el plan Pro o Ultra · Haz clic en la insignia para obtenerlo
+    ultra: Requiere el plan Ultra · Haz clic en la insignia para obtenerlo
   availability:
     authenticationRequired: Inicia sesión para usar este proveedor
     ultraRequired: Se requiere el plan Ultra
+    proRequired: Se requiere el plan Pro o Ultra
     quotaExhausted: Cuota agotada
     serviceUnavailable: No disponible temporalmente
     usedPercent: "Cuota utilizada: $1%"
@@ -1365,6 +1754,7 @@ hotkey:
   shift: Mayús
   backtick: Acento grave
   clickAndHold: Hacer clic y mantener
+  custom: Atajo personalizado
 translationHub:
   searchLanguages: Buscar idiomas...
   noLanguagesFound: No se encontraron idiomas
@@ -1376,6 +1766,8 @@ translationHub:
   translate: Traducir
   copiedToClipboard: ¡Traducción copiada al portapapeles!
   copyTranslation: Copiar traducción
+  speakSourceText: Leer texto original
+  speakTranslation: Leer traducción
   expandCard: Expandir tarjeta
   collapseCard: Contraer tarjeta
   expandAllCards: Expandir todo

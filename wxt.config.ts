@@ -6,10 +6,13 @@ import { z } from "zod"
 import {
   createExtensionClientEnvSchema,
   isLocalPackagesEnabled,
+  LOCAL_PACKAGES_DEDUPE,
   resolveExtensionEnv,
 } from "./src/env/shared"
 
 const WXT_API_KEY_PATTERN = /^WXT_.*API_KEY/
+// entrypoints/content-runtime, the ES module behind every page's content scripts
+const CONTENT_RUNTIME_NAME = "content-runtime"
 const ALLOWED_BUNDLED_API_KEYS = new Set(["WXT_POSTHOG_API_KEY"])
 const useLocalPackages = isLocalPackagesEnabled(process.env)
 const shouldSkipEnvValidation = process.env.WXT_SKIP_ENV_VALIDATION === "true"
@@ -31,6 +34,7 @@ export default defineConfig({
     ? {
         "@read-frog/definitions": path.resolve(monorepoRoot, "packages/definitions/src"),
         "@read-frog/api-contract": path.resolve(monorepoRoot, "packages/api-contract/src"),
+        "@read-frog/layout-engine": path.resolve(monorepoRoot, "packages/layout-engine/src"),
       }
     : {},
   manifest: ({ mode, browser }) => ({
@@ -44,6 +48,12 @@ export default defineConfig({
       }),
     permissions: [
       "storage",
+      // The glossary is the only user-authored, non-regenerable data the
+      // extension stores locally. Without this, IndexedDB is "best-effort" and
+      // the browser may evict it under disk pressure — fine for the translation
+      // caches, data loss for a term list the user typed by hand. It also lifts
+      // the 10 MB quota the 20,000-term cap would otherwise sit close to.
+      "unlimitedStorage",
       "tabs",
       "alarms",
       "cookies",
@@ -63,6 +73,20 @@ export default defineConfig({
         resources: ["assets/*.png", "assets/*.svg", "assets/*.webp"],
         matches: ["*://*/*", "file:///*"],
       },
+      // The shared content runtime the loader content script imports. Pages
+      // can request it too; the dynamic URL keeps it from a fixed address.
+      {
+        resources: [`${CONTENT_RUNTIME_NAME}.js`],
+        matches: ["*://*/*", "file:///*"],
+        use_dynamic_url: true,
+      },
+      // Its chunks can't have one: Chrome resolves a module's relative imports
+      // against the extension's static id, even when the module itself came
+      // from the dynamic URL. Their names change with their content.
+      {
+        resources: [`${CONTENT_RUNTIME_NAME}/*`],
+        matches: ["*://*/*", "file:///*"],
+      },
     ],
     // Firefox-specific settings for MV3
     ...(browser === "firefox" && {
@@ -74,7 +98,7 @@ export default defineConfig({
       browser_specific_settings: {
         gecko: {
           id: "{bd311a81-4530-4fcc-9178-74006155461b}",
-          strict_min_version: "112.0",
+          strict_min_version: "140.0",
           data_collection_permissions: {
             required: ["none"],
             optional: ["technicalAndInteraction"],
@@ -88,6 +112,11 @@ export default defineConfig({
     excludeSources: ["docs/**/*", "assets/**/*", "repos/**/*", "readmes/**/*"],
   },
   hooks: {
+    "build:before": (wxt) => {
+      if (wxt.config.browser === "safari" && useLocalPackages) {
+        throw new Error("Do not package a Safari build made with local packages")
+      }
+    },
     "build:manifestGenerated": (wxt, manifest) => {
       if (wxt.config.browser !== "safari") return
       delete manifest.side_panel
@@ -98,8 +127,31 @@ export default defineConfig({
       // also lets the existing audio adapter work without Chrome's offscreen API.
       manifest.background = { scripts: ["background.js"], type: "module", persistent: false }
     },
+    // With local packages the bundle holds @read-frog/layout-engine's readable
+    // source, which must never leave this machine.
+    "zip:start": () => {
+      if (useLocalPackages) throw new Error("Do not zip a build made with local packages")
+    },
     "vite:build:extendConfig": (entrypoints, viteConfig) => {
       const entrypoint = entrypoints.length === 1 ? entrypoints[0] : undefined
+      if (entrypoint?.type === "unlisted-script" && entrypoint.name === CONTENT_RUNTIME_NAME) {
+        // WXT builds every script as one IIFE. The content runtime is imported
+        // as an ES module instead, so it can leave code (such as the locales
+        // it doesn't use) in chunks that load when needed.
+        if (viteConfig.build?.lib) viteConfig.build.lib.formats = ["es"]
+        const output = viteConfig.build?.rollupOptions?.output
+        for (const outputOptions of Array.isArray(output) ? output : output ? [output] : []) {
+          outputOptions.chunkFileNames = `${CONTENT_RUNTIME_NAME}/[name]-[hash].js`
+          outputOptions.assetFileNames = "assets/[name]-[hash].[ext]"
+          // Vite keeps whitespace and pure annotations in ES library output for
+          // the bundlers that would consume it; nothing bundles this one again.
+          if (viteConfig.build?.minify !== false) {
+            outputOptions.minify = true
+            outputOptions.comments = false
+          }
+        }
+        return
+      }
       if (entrypoint?.type !== "content-script") return
 
       const output = viteConfig.build?.rollupOptions?.output
@@ -134,6 +186,10 @@ export default defineConfig({
         "@codemirror/search",
         "@codemirror/commands",
         "@lezer/common",
+        // @codemirror/lang-liquid's parser and highlighting share these with the other languages.
+        "@lezer/highlight",
+        "@lezer/lr",
+        ...(useLocalPackages ? LOCAL_PACKAGES_DEDUPE : []),
       ],
     },
     plugins: [

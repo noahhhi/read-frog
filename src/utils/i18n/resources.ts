@@ -1,5 +1,7 @@
 /// <reference types="@modyfi/vite-plugin-yaml/modules" />
 import type { Resource } from "i18next"
+import type { SupportedUiLocale } from "./locales"
+import az from "@/locales/az.yml"
 import en from "@/locales/en.yml"
 import es from "@/locales/es.yml"
 import ja from "@/locales/ja.yml"
@@ -10,28 +12,8 @@ import vi from "@/locales/vi.yml"
 import zhCN from "@/locales/zh-CN.yml"
 import zhTW from "@/locales/zh-TW.yml"
 
-/**
- * The interface languages the runtime i18next engine can switch between.
- *
- * MUST stay in sync with the `uiLanguage` enum in `@/types/config/config` and the
- * files under `src/locales/`. `@wxt-dev/i18n/module` still reads those same files to
- * emit `_locales/*` for manifest name/description localization (browser-locale-bound).
- */
-export const SUPPORTED_UI_LOCALES = [
-  "en",
-  "es",
-  "ja",
-  "ko",
-  "ru",
-  "tr",
-  "vi",
-  "zh-CN",
-  "zh-TW",
-] as const
-
-export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
-
-export const DEFAULT_UI_LOCALE: SupportedUiLocale = "en"
+export type { SupportedUiLocale } from "./locales"
+export { DEFAULT_UI_LOCALE, SUPPORTED_UI_LOCALES } from "./locales"
 
 interface LocaleTree {
   [key: string]: string | LocaleTree
@@ -62,6 +44,7 @@ function convertTree(node: LocaleTree): LocaleTree {
 }
 
 const rawResources: Record<SupportedUiLocale, LocaleTree> = {
+  az,
   en,
   es,
   ja,

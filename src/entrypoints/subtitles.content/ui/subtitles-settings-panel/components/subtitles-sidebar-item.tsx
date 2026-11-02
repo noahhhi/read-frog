@@ -1,27 +1,23 @@
-import { IconFileTextAi, IconLoader2 } from "@tabler/icons-react"
-import { useQueryClient } from "@tanstack/react-query"
+import { IconBook, IconLoader2 } from "@tabler/icons-react"
 import { useAtom, useAtomValue } from "jotai"
 import { useEffect, useRef, useState } from "react"
-import { match } from "ts-pattern"
-import { browser } from "#imports"
-import { configFieldsAtomMap } from "@/utils/atoms/config"
-import { featureProviderRefAtom } from "@/utils/atoms/provider"
 import { i18n } from "@/utils/i18n"
+import { OverlaySubtitlesError } from "@/utils/subtitles/errors"
 import { showAnchoredSubtitlesToast } from "@/utils/subtitles/toast"
 import {
-  checkVideoSummaryAvailability,
-  videoSummaryQueryKey,
-} from "@/utils/subtitles/video-summary"
-import { currentVideoIdAtom, subtitlesSidebarOpenAtom, subtitlesStore } from "../../../atoms"
+  currentVideoIdAtom,
+  sourceTrackAtom,
+  subtitlesSidebarOpenAtom,
+  subtitlesStore,
+  subtitlesVisibleAtom,
+} from "../../../atoms"
 import { useSubtitlesUI } from "../../subtitles-ui-context"
 import { SubpageMenuEntry } from "./subpage-menu-entry"
 
 export function SubtitlesSidebarItem() {
-  const { supportsSidebar, hasSubtitlesAvailable } = useSubtitlesUI()
+  const { supportsSidebar, hasSubtitlesAvailable, toggleSubtitles } = useSubtitlesUI()
   const [isOpen, setOpen] = useAtom(subtitlesSidebarOpenAtom, { store: subtitlesStore })
-  const queryClient = useQueryClient()
-  const language = useAtomValue(configFieldsAtomMap.language)
-  const providerRef = useAtomValue(featureProviderRefAtom("videoSubtitles"))
+  const sourceTrack = useAtomValue(sourceTrackAtom, { store: subtitlesStore })
   const [checking, setChecking] = useState(false)
   const openRequestId = useRef(0)
   const anchor = useRef<HTMLButtonElement>(null)
@@ -45,6 +41,13 @@ export function SubtitlesSidebarItem() {
     return null
   }
 
+  const openPanel = () => {
+    setOpen(true)
+    if (!subtitlesStore.get(subtitlesVisibleAtom)) {
+      toggleSubtitles(true)
+    }
+  }
+
   const open = async () => {
     const videoId = subtitlesStore.get(currentVideoIdAtom)
     if (videoId === null) return
@@ -52,55 +55,31 @@ export function SubtitlesSidebarItem() {
     const requestId = ++openRequestId.current
     const isCurrent = () =>
       requestId === openRequestId.current && videoId === subtitlesStore.get(currentVideoIdAtom)
-    // A cached summary means both checks passed once already; re-running them
-    // would make reopening wait on a round trip for an answer we have.
-    if (queryClient.getQueryData(videoSummaryQueryKey(videoId, language.targetCode, providerRef))) {
+    // A loaded track is proof the video has subtitles, so the probe below would
+    // only re-answer a question already settled.
+    if (sourceTrack.length > 0) {
       setChecking(false)
-      setOpen(true)
+      openPanel()
       return
     }
 
     setChecking(true)
     try {
-      const availability = await checkVideoSummaryAvailability()
-      if (!isCurrent()) return
-      const blocked = match(availability)
-        .with({ status: "ok" }, () => false)
-        // Already actionable; a settings link would point away from it.
-        .with({ status: "hostedUnavailable" }, ({ message }) => {
-          showAnchoredSubtitlesToast(message, anchor.current)
-          return true
-        })
-        .with({ status: "needsModel" }, () => {
-          showAnchoredSubtitlesToast(
-            i18n.t("subtitles.sidebar.summary.needsModel"),
-            anchor.current,
-            {
-              label: i18n.t("subtitles.sidebar.summary.openSettings"),
-              url: browser.runtime.getURL("/options.html#/api-providers?section=feature-providers"),
-            },
-          )
-          return true
-        })
-        .exhaustive()
-      if (blocked) {
-        return
-      }
-
       const hasSubtitles = await hasSubtitlesAvailable()
       if (!isCurrent()) return
       if (!hasSubtitles) {
-        showAnchoredSubtitlesToast(
-          i18n.t("subtitles.sidebar.summary.needsSubtitles"),
-          anchor.current,
-        )
+        showAnchoredSubtitlesToast(i18n.t("subtitles.sidebar.needsSubtitles"), anchor.current)
         return
       }
-
-      setOpen(true)
-    } catch {
+      openPanel()
+    } catch (error) {
       if (isCurrent()) {
-        showAnchoredSubtitlesToast(i18n.t("subtitles.sidebar.summary.failedTitle"), anchor.current)
+        // A lookup that never reached the player explains itself; anything else stays generic.
+        const message =
+          error instanceof OverlaySubtitlesError
+            ? error.message
+            : i18n.t("subtitles.sidebar.summary.failedTitle")
+        showAnchoredSubtitlesToast(message, anchor.current)
       }
     } finally {
       if (requestId === openRequestId.current) {
@@ -114,9 +93,9 @@ export function SubtitlesSidebarItem() {
       ref={anchor}
       icon={
         checking ? (
-          <IconLoader2 className="size-4 animate-spin" />
+          <IconLoader2 className="size-3.5 animate-spin" />
         ) : (
-          <IconFileTextAi className="size-4" />
+          <IconBook className="size-3.5" />
         )
       }
       label={i18n.t("subtitles.sidebar.menu.label")}

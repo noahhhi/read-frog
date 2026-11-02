@@ -1,0 +1,717 @@
+import type {
+  EbookBridgeSelectionDirection,
+  EbookBridgeSelectionPayload,
+} from "@read-frog/definitions"
+import type { ModalDialogHostController } from "./modal-dialog-host"
+import type { DeferredSelectionOpenDetail } from "@/utils/constants/selection"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react"
+import { ANALYTICS_SURFACE } from "@/types/analytics"
+import { configFieldsAtomMap } from "@/utils/atoms/config"
+import { NOTRANSLATE_CLASS } from "@/utils/constants/dom-labels"
+import {
+  DEFERRED_SELECTION_OPEN_EVENT,
+  EXTERNAL_SELECTION_CLEAR_EVENT,
+  EXTERNAL_SELECTION_OPEN_EVENT,
+  MARGIN,
+  SELECTION_TOOLBAR_READY_EVENT,
+} from "@/utils/constants/selection"
+import {
+  SELECTION_CONTENT_OVERLAY_LAYERS,
+  SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE,
+} from "@/utils/constants/selection-overlay-layers"
+import { getSelectionToolbarItems } from "@/utils/selection-toolbar-items"
+import { cn } from "@/utils/styles/utils"
+import { urlMatchesPattern } from "@/utils/url-pattern"
+import { useAnnotation } from "../annotation/provider"
+import {
+  ANNOTATE_REVEAL_WIDTH_PX,
+  AnnotateButton,
+  AnnotateReveal,
+  useAnnotateReveal,
+} from "../annotation/toolbar-slot"
+import { buildContextSnapshot, readSelectionSnapshot } from "../utils"
+import {
+  clearSelectionStateAtom,
+  createSelectionSession,
+  isSelectionToolbarOpenAtom,
+  setSelectionStateAtom,
+} from "./atoms"
+import { CloseButton, DropEvent } from "./close-button"
+import { createModalDialogHostController } from "./modal-dialog-host"
+import { SelectionToolbarMoreMenu } from "./more-menu"
+import { SelectionToolbarPinnedItems } from "./pinned-items"
+import {
+  collectSelectionScrollTargets,
+  createSelectionAnchorTracker,
+  getSelectionDirection,
+  getToolbarViewportPosition,
+  getViewportRect,
+  measureSelectionAnchor,
+  SelectionDirection,
+  viewportPointToHostPoint,
+} from "./positioning"
+
+const EXTERNAL_SELECTION_DIRECTION_MAP: Record<EbookBridgeSelectionDirection, SelectionDirection> =
+  {
+    "top-left": SelectionDirection.TOP_LEFT,
+    "top-right": SelectionDirection.TOP_RIGHT,
+    "bottom-left": SelectionDirection.BOTTOM_LEFT,
+    "bottom-right": SelectionDirection.BOTTOM_RIGHT,
+  }
+
+const SELECTION_GUARD_INTERACTIVE_SELECTOR = [
+  "button",
+  '[role="button"]',
+  "a[href]",
+  "input",
+  "textarea",
+  "select",
+  "summary",
+  "video",
+].join(", ")
+
+const SELECTION_OVERLAY_ROOT_SELECTOR = `[${SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE}]`
+
+function getInteractiveGuardTarget(event: MouseEvent) {
+  const eventPath = event.composedPath()
+
+  for (const node of eventPath) {
+    if (!(node instanceof Element)) {
+      continue
+    }
+
+    if (node.matches(SELECTION_GUARD_INTERACTIVE_SELECTOR)) {
+      return node
+    }
+
+    const closestInteractive = node.closest(SELECTION_GUARD_INTERACTIVE_SELECTOR)
+    if (closestInteractive) {
+      return closestInteractive
+    }
+  }
+
+  if (!(event.target instanceof Element)) {
+    return null
+  }
+
+  if (event.target.matches(SELECTION_GUARD_INTERACTIVE_SELECTOR)) {
+    return event.target
+  }
+
+  return event.target.closest(SELECTION_GUARD_INTERACTIVE_SELECTOR)
+}
+
+function getSelectionOverlayShadowRoot(overlayContainer: HTMLElement | null) {
+  const root = overlayContainer?.getRootNode()
+  return root instanceof ShadowRoot ? root : null
+}
+
+function getNearestSelectionOverlayElement(node: Node | null) {
+  let current: Node | null = node
+
+  while (current) {
+    if (current instanceof Element) {
+      return current
+    }
+
+    const root = current.getRootNode()
+    current = current.parentNode ?? (root instanceof ShadowRoot ? root.host : null)
+  }
+
+  return null
+}
+
+function isNodeDirectlyInsideSelectionOverlay(
+  node: Node,
+  overlayContainer: HTMLElement | null,
+  overlayShadowRoot: ShadowRoot | null,
+) {
+  if (overlayContainer?.contains(node)) {
+    return true
+  }
+
+  const overlayElement = getNearestSelectionOverlayElement(node)
+  if (overlayElement?.closest(SELECTION_OVERLAY_ROOT_SELECTOR)) {
+    return true
+  }
+
+  if (!overlayShadowRoot) {
+    return false
+  }
+
+  return node === overlayShadowRoot || node.getRootNode() === overlayShadowRoot
+}
+
+function isNodeInsideSelectionOverlay(
+  node: Node | null,
+  overlayContainer: HTMLElement | null,
+  overlayShadowRoot: ShadowRoot | null,
+) {
+  // A shadow root nested inside the overlay (a custom action's layout renders
+  // in one) hides its nodes from `contains`, `closest` and the root check, so
+  // each enclosing shadow host is checked in turn.
+  let current = node
+  while (current) {
+    if (isNodeDirectlyInsideSelectionOverlay(current, overlayContainer, overlayShadowRoot)) {
+      return true
+    }
+
+    const root = current.getRootNode()
+    current = root instanceof ShadowRoot ? root.host : null
+  }
+
+  return false
+}
+
+function collectSelectionBoundaryNodes(selection: Selection) {
+  const boundaryNodes = new Set<Node>()
+
+  if (selection.anchorNode) {
+    boundaryNodes.add(selection.anchorNode)
+  }
+
+  if (selection.focusNode) {
+    boundaryNodes.add(selection.focusNode)
+  }
+
+  for (let index = 0; index < selection.rangeCount; index += 1) {
+    try {
+      const range = selection.getRangeAt(index)
+      boundaryNodes.add(range.startContainer)
+      boundaryNodes.add(range.endContainer)
+    } catch {
+      break
+    }
+  }
+
+  return [...boundaryNodes]
+}
+
+function isSelectionInsideSelectionOverlay(
+  selection: Selection | null,
+  overlayContainer: HTMLElement | null,
+  overlayShadowRoot: ShadowRoot | null,
+) {
+  if (!selection) {
+    return false
+  }
+
+  return collectSelectionBoundaryNodes(selection).some((node) =>
+    isNodeInsideSelectionOverlay(node, overlayContainer, overlayShadowRoot),
+  )
+}
+
+function isMouseEventInsideSelectionOverlay(
+  event: MouseEvent,
+  overlayContainer: HTMLElement | null,
+  overlayShadowRoot: ShadowRoot | null,
+) {
+  const eventPath = event.composedPath()
+
+  for (const node of eventPath) {
+    if (
+      node instanceof Node &&
+      isNodeInsideSelectionOverlay(node, overlayContainer, overlayShadowRoot)
+    ) {
+      return true
+    }
+  }
+
+  return isNodeInsideSelectionOverlay(
+    event.target instanceof Node ? event.target : null,
+    overlayContainer,
+    overlayShadowRoot,
+  )
+}
+
+export function SelectionToolbar() {
+  const tooltipRef = useRef<HTMLDivElement>(null)
+  const tooltipContainerRef = useRef<HTMLDivElement>(null)
+  const selectionPositionRef = useRef<{ x: number; y: number } | null>(null) // store selection position (base position without direction offset)
+  const selectionStartRef = useRef<{ x: number; y: number } | null>(null) // store selection start position
+  const selectionDirectionRef = useRef<SelectionDirection>(SelectionDirection.BOTTOM_RIGHT) // store selection direction
+  const selectionAnchorTrackerRef = useRef<ReturnType<typeof createSelectionAnchorTracker>>(null)
+  const selectionScrollTargetsRef = useRef<Array<Element | ShadowRoot>>([])
+  const modalDialogHostControllerRef = useRef<ModalDialogHostController>(null)
+  const isPointerDownInsideOverlayRef = useRef(false)
+  const preserveSelectionStateRef = useRef(false)
+  const [isSelectionToolbarOpen, setIsSelectionToolbarOpen] = useAtom(isSelectionToolbarOpenAtom)
+  const setSelectionState = useSetAtom(setSelectionStateAtom)
+  const clearSelectionState = useSetAtom(clearSelectionStateAtom)
+  const selectionToolbar = useAtomValue(configFieldsAtomMap.selectionToolbar)
+  const isSiteDisabled = selectionToolbar.disabledSelectionToolbarPatterns?.some((pattern) =>
+    urlMatchesPattern(window.location.href, pattern),
+  )
+  const annotation = useAnnotation()
+  // With nothing pinned the toolbar still shows its "more" menu; with nothing
+  // enabled — and the annotation slot off — there is nothing to show.
+  const enabledItems = getSelectionToolbarItems(selectionToolbar).filter((item) => item.enabled)
+  const hasAnyEnabledItem = enabledItems.length > 0 || annotation.enabled
+  const hasAnyPinnedItem = enabledItems.some((item) => item.pinned)
+  const isSelectionToolbarVisible =
+    isSelectionToolbarOpen && selectionToolbar.enabled && !isSiteDisabled && hasAnyEnabledItem
+  const reveal = useAnnotateReveal(tooltipRef, isSelectionToolbarVisible)
+  // In annotation mode a selection is annotated where it is made; the toolbar
+  // never opens for it. Selections in text controls have nothing to annotate.
+  const annotateInMode = useEffectEvent(
+    (snapshot: NonNullable<ReturnType<typeof readSelectionSnapshot>>) => {
+      if (!annotation.mode) return false
+      if (!snapshot.textControl) {
+        annotation.annotate(
+          createSelectionSession(snapshot, buildContextSnapshot(snapshot)),
+          ANALYTICS_SURFACE.ANNOTATION_MODE,
+        )
+      }
+      return true
+    },
+  )
+  const dropdownOpenRef = useRef(false)
+  // Bumped per external (ebook bridge) selection so the position is re-applied
+  // even when the toolbar is already visible (visibility doesn't flip then).
+  const [externalSelectionTick, setExternalSelectionTick] = useState(0)
+
+  const placeHostForSelection = useCallback(
+    (ranges: Parameters<ModalDialogHostController["placeForRanges"]>[0]) => {
+      const root = tooltipContainerRef.current?.getRootNode()
+      if (!(root instanceof ShadowRoot) || !(root.host instanceof HTMLElement)) {
+        return
+      }
+
+      modalDialogHostControllerRef.current ??= createModalDialogHostController(root.host)
+      modalDialogHostControllerRef.current.placeForRanges(ranges)
+    },
+    [],
+  )
+
+  useEffect(
+    () => () => {
+      modalDialogHostControllerRef.current?.dispose()
+      modalDialogHostControllerRef.current = null
+    },
+    [],
+  )
+
+  const updatePosition = useCallback(
+    ({ remeasureSelection = false }: { remeasureSelection?: boolean } = {}) => {
+      const tooltip = tooltipRef.current
+      const viewportHost = tooltipContainerRef.current
+      const selectionPosition = selectionPositionRef.current
+
+      if (!isSelectionToolbarVisible || !tooltip || !viewportHost || !selectionPosition) {
+        return
+      }
+
+      const viewport = getViewportRect()
+      const tracker = selectionAnchorTrackerRef.current
+
+      if (remeasureSelection && tracker) {
+        const measurement = measureSelectionAnchor(tracker, viewport)
+
+        if (measurement.status === "invalid") {
+          selectionAnchorTrackerRef.current = null
+          selectionScrollTargetsRef.current = []
+          selectionPositionRef.current = null
+          clearSelectionState()
+          setIsSelectionToolbarOpen(false)
+          return
+        }
+
+        selectionAnchorTrackerRef.current = measurement.tracker
+        selectionPositionRef.current = measurement.anchor
+      }
+
+      const nextSelectionPosition = selectionPositionRef.current
+      if (!nextSelectionPosition) {
+        return
+      }
+
+      const tooltipRect = tooltip.getBoundingClientRect()
+      const viewportPosition = getToolbarViewportPosition(
+        selectionDirectionRef.current,
+        nextSelectionPosition,
+        {
+          width: tooltipRect.width || tooltip.offsetWidth,
+          height: tooltipRect.height || tooltip.offsetHeight,
+        },
+        viewport,
+        MARGIN,
+      )
+      const hostPosition = viewportPointToHostPoint(viewportPosition, viewportHost)
+
+      tooltip.style.top = `${hostPosition.y}px`
+      tooltip.style.left = `${hostPosition.x}px`
+    },
+    [clearSelectionState, isSelectionToolbarVisible, setIsSelectionToolbarOpen],
+  )
+
+  useLayoutEffect(() => {
+    updatePosition({ remeasureSelection: true })
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- the dependencies are re-run triggers, not values the effect body reads
+  }, [updatePosition, externalSelectionTick])
+
+  useEffect(() => {
+    if (!isSelectionToolbarVisible) {
+      return undefined
+    }
+
+    let animationFrameId: number | null = null
+    const schedulePositionUpdate = () => {
+      if (animationFrameId !== null) {
+        return
+      }
+
+      animationFrameId = requestAnimationFrame(() => {
+        animationFrameId = null
+        updatePosition({ remeasureSelection: true })
+      })
+    }
+
+    const captureScrollOptions: AddEventListenerOptions = { capture: true, passive: true }
+    const passiveOptions: AddEventListenerOptions = { passive: true }
+    const selectionScrollTargets = selectionScrollTargetsRef.current
+    const visualViewport = window.visualViewport
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedulePositionUpdate)
+
+    document.addEventListener("scroll", schedulePositionUpdate, captureScrollOptions)
+    window.addEventListener("scroll", schedulePositionUpdate, passiveOptions)
+    window.addEventListener("resize", schedulePositionUpdate)
+    visualViewport?.addEventListener("scroll", schedulePositionUpdate, passiveOptions)
+    visualViewport?.addEventListener("resize", schedulePositionUpdate)
+    selectionScrollTargets.forEach((target) =>
+      target.addEventListener("scroll", schedulePositionUpdate, captureScrollOptions),
+    )
+    if (tooltipRef.current) {
+      resizeObserver?.observe(tooltipRef.current)
+    }
+
+    return () => {
+      document.removeEventListener("scroll", schedulePositionUpdate, true)
+      window.removeEventListener("scroll", schedulePositionUpdate)
+      window.removeEventListener("resize", schedulePositionUpdate)
+      visualViewport?.removeEventListener("scroll", schedulePositionUpdate)
+      visualViewport?.removeEventListener("resize", schedulePositionUpdate)
+      selectionScrollTargets.forEach((target) =>
+        target.removeEventListener("scroll", schedulePositionUpdate, true),
+      )
+      resizeObserver?.disconnect()
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId)
+      }
+    }
+  }, [isSelectionToolbarVisible, updatePosition])
+
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (isPointerDownInsideOverlayRef.current) {
+        isPointerDownInsideOverlayRef.current = false
+        preserveSelectionStateRef.current = true
+        return
+      }
+
+      const interactiveTarget = getInteractiveGuardTarget(e)
+
+      // Use requestAnimationFrame to delay selection check
+      // This ensures selectionchange event fires first if text selection was cleared
+      requestAnimationFrame(() => {
+        const isInputOrTextarea =
+          document.activeElement instanceof HTMLInputElement ||
+          document.activeElement instanceof HTMLTextAreaElement
+
+        if (isInputOrTextarea && e.target !== document.activeElement) {
+          return
+        }
+
+        // check if there is text selected
+        const selection = window.getSelection()
+        const overlayShadowRoot = getSelectionOverlayShadowRoot(tooltipContainerRef.current)
+
+        if (
+          isSelectionInsideSelectionOverlay(
+            selection,
+            tooltipContainerRef.current,
+            overlayShadowRoot,
+          )
+        ) {
+          preserveSelectionStateRef.current = true
+          return
+        }
+
+        const selectionSnapshot = readSelectionSnapshot(selection)
+
+        // https://github.com/mengxi-ream/read-frog/issues/547
+        // https://github.com/mengxi-ream/read-frog/pull/790
+        if (
+          !isInputOrTextarea &&
+          interactiveTarget &&
+          !selection?.containsNode(interactiveTarget, true)
+        ) {
+          return
+        }
+
+        if (selectionSnapshot) {
+          if (annotateInMode(selectionSnapshot)) return
+          preserveSelectionStateRef.current = false
+          // Enter a native modal's top layer before React measures or shows the toolbar.
+          placeHostForSelection(selectionSnapshot.ranges)
+          setSelectionState({
+            selection: selectionSnapshot,
+            context: buildContextSnapshot(selectionSnapshot),
+          })
+          if (selectionStartRef.current) {
+            // Get selection start and end positions
+            const startX = selectionStartRef.current.x
+            const startY = selectionStartRef.current.y
+            const endX = e.clientX
+            const endY = e.clientY
+
+            // Determine and store selection direction
+            selectionDirectionRef.current = getSelectionDirection(startX, startY, endX, endY)
+          } else {
+            selectionDirectionRef.current = SelectionDirection.BOTTOM_RIGHT
+          }
+
+          const selectionPosition = { x: e.clientX, y: e.clientY }
+          selectionPositionRef.current = selectionPosition
+          selectionAnchorTrackerRef.current = createSelectionAnchorTracker(
+            selectionSnapshot.ranges,
+            selectionPosition,
+          )
+          selectionScrollTargetsRef.current = collectSelectionScrollTargets(
+            selectionSnapshot.ranges,
+          )
+          setIsSelectionToolbarOpen(true)
+        }
+      })
+    }
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.button === 2) {
+        return
+      }
+
+      const overlayShadowRoot = getSelectionOverlayShadowRoot(tooltipContainerRef.current)
+      isPointerDownInsideOverlayRef.current = isMouseEventInsideSelectionOverlay(
+        e,
+        tooltipContainerRef.current,
+        overlayShadowRoot,
+      )
+
+      if (isPointerDownInsideOverlayRef.current) {
+        preserveSelectionStateRef.current = true
+        return
+      }
+
+      preserveSelectionStateRef.current = false
+
+      // Record selection start position
+      selectionStartRef.current = { x: e.clientX, y: e.clientY }
+      selectionPositionRef.current = null
+      selectionAnchorTrackerRef.current = null
+      selectionScrollTargetsRef.current = []
+
+      clearSelectionState()
+      setIsSelectionToolbarOpen(false)
+    }
+
+    const handleSelectionChange = () => {
+      const selection = window.getSelection()
+      const overlayShadowRoot = getSelectionOverlayShadowRoot(tooltipContainerRef.current)
+
+      if (
+        isSelectionInsideSelectionOverlay(selection, tooltipContainerRef.current, overlayShadowRoot)
+      ) {
+        preserveSelectionStateRef.current = true
+        return
+      }
+
+      // if the selected content is cleared, hide the tooltip
+      if (!selection || selection.toString().trim().length === 0) {
+        if (preserveSelectionStateRef.current) {
+          return
+        }
+
+        clearSelectionState()
+        selectionPositionRef.current = null
+        selectionAnchorTrackerRef.current = null
+        selectionScrollTargetsRef.current = []
+        // Don't hide toolbar when dropdown is open to prevent unwanted dismissal
+        // (Firefox clears selection when dropdown gains focus)
+        if (!dropdownOpenRef.current) setIsSelectionToolbarOpen(false)
+      }
+    }
+
+    const handleDeferredSelection = (event: Event) => {
+      const detail = (event as CustomEvent<DeferredSelectionOpenDetail>).detail
+      if (
+        !detail ||
+        typeof detail.text !== "string" ||
+        !Number.isFinite(detail.x) ||
+        !Number.isFinite(detail.y)
+      )
+        return
+      if (window.getSelection()?.toString() !== detail.text) return
+      handleMouseUp(new MouseEvent("mouseup", { clientX: detail.x, clientY: detail.y }))
+    }
+
+    document.addEventListener("mouseup", handleMouseUp)
+    document.addEventListener("mousedown", handleMouseDown)
+    document.addEventListener("selectionchange", handleSelectionChange)
+    window.addEventListener(DEFERRED_SELECTION_OPEN_EVENT, handleDeferredSelection)
+    window.__READ_FROG_SELECTION_TOOLBAR_READY__ = true
+    window.dispatchEvent(new CustomEvent(SELECTION_TOOLBAR_READY_EVENT))
+
+    return () => {
+      window.__READ_FROG_SELECTION_TOOLBAR_READY__ = false
+      window.removeEventListener(DEFERRED_SELECTION_OPEN_EVENT, handleDeferredSelection)
+      document.removeEventListener("mouseup", handleMouseUp)
+      document.removeEventListener("mousedown", handleMouseDown)
+      document.removeEventListener("selectionchange", handleSelectionChange)
+    }
+  }, [clearSelectionState, placeHostForSelection, setIsSelectionToolbarOpen, setSelectionState])
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      dropdownOpenRef.current = Boolean((e as CustomEvent).detail?.open)
+    }
+    window.addEventListener(DropEvent, handler)
+    return () => window.removeEventListener(DropEvent, handler)
+  }, [])
+
+  // External selections (e.g. the readfrog.app ebook reader) relay in-book
+  // selections that never touch this frame's Selection API, so they enter
+  // through CustomEvents and reuse the same state mutations as handleMouseUp
+  useEffect(() => {
+    const handleExternalSelectionOpen = (e: Event) => {
+      const detail = (e as CustomEvent<EbookBridgeSelectionPayload>).detail
+      if (!detail) {
+        return
+      }
+
+      const paragraphs =
+        detail.contextParagraphs.length > 0 ? detail.contextParagraphs : [detail.text]
+
+      preserveSelectionStateRef.current = false
+      setSelectionState({
+        selection: { text: detail.text, ranges: [] },
+        context: {
+          text: paragraphs.join("\n\n"),
+          paragraphs,
+        },
+      })
+      selectionDirectionRef.current = EXTERNAL_SELECTION_DIRECTION_MAP[detail.direction]
+      selectionPositionRef.current = detail.anchor
+      selectionAnchorTrackerRef.current = null
+      selectionScrollTargetsRef.current = []
+      setIsSelectionToolbarOpen(true)
+      // Force a reposition: the toolbar may already be open, in which case the
+      // updatePosition layout effect would not re-run on its own.
+      setExternalSelectionTick((tick) => tick + 1)
+    }
+
+    const handleExternalSelectionClear = () => {
+      // Bridged clears only fire for in-book actions (mousedown, collapsed
+      // selection, page turn) — the same intent as a top-frame mousedown
+      // outside the overlay, so reset the preserve flag like handleMouseDown
+      // does instead of letting a stale flag swallow the dismissal.
+      preserveSelectionStateRef.current = false
+
+      clearSelectionState()
+      selectionPositionRef.current = null
+      selectionAnchorTrackerRef.current = null
+      selectionScrollTargetsRef.current = []
+      // Don't hide toolbar when dropdown is open to prevent unwanted dismissal
+      if (!dropdownOpenRef.current) setIsSelectionToolbarOpen(false)
+    }
+
+    window.addEventListener(EXTERNAL_SELECTION_OPEN_EVENT, handleExternalSelectionOpen)
+    window.addEventListener(EXTERNAL_SELECTION_CLEAR_EVENT, handleExternalSelectionClear)
+
+    return () => {
+      window.removeEventListener(EXTERNAL_SELECTION_OPEN_EVENT, handleExternalSelectionOpen)
+      window.removeEventListener(EXTERNAL_SELECTION_CLEAR_EVENT, handleExternalSelectionClear)
+    }
+  }, [clearSelectionState, setIsSelectionToolbarOpen, setSelectionState])
+
+  return (
+    <div
+      ref={tooltipContainerRef}
+      className={cn(
+        NOTRANSLATE_CLASS,
+        // Collapse to 0x0 while idle: a persistent full-viewport fixed layer
+        // makes Chrome claim horizontal touch pans on pages using
+        // `touch-action: manipulation`, firing pointercancel and breaking
+        // touch drag gestures (e.g. carousels) outside the toolbar.
+        isSelectionToolbarVisible
+          ? `pointer-events-none fixed inset-0 ${SELECTION_CONTENT_OVERLAY_LAYERS.selectionOverlay}`
+          : "pointer-events-none fixed h-0 w-0",
+      )}
+      {...{ [SELECTION_CONTENT_OVERLAY_ROOT_ATTRIBUTE]: "" }}
+    >
+      {selectionToolbar.enabled && !isSiteDisabled && hasAnyEnabledItem && (
+        <div
+          ref={tooltipRef}
+          inert={!isSelectionToolbarVisible}
+          className={cn(
+            `group absolute ${SELECTION_CONTENT_OVERLAY_LAYERS.selectionOverlay} overflow-visible transition-[opacity,transform] duration-150`,
+            isSelectionToolbarVisible
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0",
+          )}
+          onPointerEnter={reveal.cancelClose}
+          onPointerLeave={reveal.scheduleClose}
+          onBlur={reveal.scheduleClose}
+          style={{ transform: reveal.shift ? `translateX(${reveal.shift}px)` : undefined }}
+        >
+          {/* The bar is one box: this element carries its border, background
+              and shadow, and when the annotation slot opens it is this box's
+              left edge that moves out, so there is no seam to hide. The
+              toolbar is measured and placed by the buttons alone. */}
+          <div
+            data-slot="selection-toolbar-surface"
+            className="relative"
+            style={{ opacity: "var(--rf-selection-opacity, 1)" }}
+          >
+            <div
+              data-slot="selection-toolbar-chrome"
+              aria-hidden
+              className="absolute inset-y-0 right-0 rounded-lg border border-border/50 bg-popover shadow-md transition-[left] duration-150 ease-out"
+              style={{ left: reveal.open ? -ANNOTATE_REVEAL_WIDTH_PX : 0 }}
+            />
+            {annotation.enabled && <AnnotateReveal open={reveal.open} />}
+            {/* Clips the buttons' hover fills to the bar's rounded ends; with
+                the slot open, its left end is no longer the bar's. The close
+                button is positioned against the wrapper above, so it isn't
+                clipped. */}
+            <div
+              data-slot="selection-toolbar-buttons"
+              className={cn(
+                "relative flex items-center overflow-hidden rounded-lg transition-[border-radius] duration-150 ease-out",
+                reveal.open && "rounded-l-none",
+              )}
+            >
+              {annotation.enabled && (
+                <>
+                  <AnnotateButton onPointerEnter={reveal.openReveal} />
+                  <div className="w-px shrink-0 self-stretch bg-border" />
+                </>
+              )}
+              <div className="no-scrollbar flex max-w-105 items-center overflow-x-auto overflow-y-hidden scroll-driven:scroll-fade-x">
+                <SelectionToolbarPinnedItems />
+              </div>
+              {hasAnyPinnedItem && <div className="w-px shrink-0 self-stretch bg-border" />}
+              <SelectionToolbarMoreMenu />
+            </div>
+          </div>
+          {/* Outside the surface, which is positioned now, yet as faded as the
+              bar: the wrapper is not positioned, so the button still sits
+              against the toolbar. */}
+          <div style={{ opacity: "var(--rf-selection-opacity, 1)" }}>
+            <CloseButton />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

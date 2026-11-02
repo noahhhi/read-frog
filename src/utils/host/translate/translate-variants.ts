@@ -138,6 +138,7 @@ async function translateTextUsingPageConfig(
     providerConfig,
     hostedFeature: "pageTranslation",
     enableAIContentAware: config.pageTranslation.enableAIContentAware,
+    glossaryEnabled: config.glossary.enabled,
     extraHashTags: options.extraHashTags,
     webPageContext: options.webPageContext,
     textFormat: options.textFormat,
@@ -229,6 +230,7 @@ export async function translateTextForInput(
   text: string,
   fromLang: InputTranslationLang,
   toLang: InputTranslationLang,
+  onTargetLanguageResolved?: (targetLanguage: LangCodeISO6393) => void,
 ): Promise<string> {
   const config = await getConfigOrThrow()
   // Capability-based, not resolveProviderConfig: that helper looks the id up in
@@ -245,6 +247,7 @@ export async function translateTextForInput(
 
   const resolvedFromLang = await resolveInputLang(fromLang, config.language)
   const resolvedToLang = await resolveInputLang(toLang, config.language)
+  onTargetLanguageResolved?.(resolvedToLang)
 
   if (resolvedFromLang === resolvedToLang) {
     return ""
@@ -268,6 +271,7 @@ export async function translateTextForInput(
     providerConfig: resolved,
     hostedFeature: "inputTranslation",
     enableAIContentAware: config.pageTranslation.enableAIContentAware,
+    glossaryEnabled: config.glossary.enabled,
     webPageContext,
     // User-typed newlines are always meaningful.
     preserveLineBreaks: true,
