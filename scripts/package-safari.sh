@@ -26,8 +26,13 @@ if [[ -n "${SAFARI_TEAM_ID:-}" ]]; then
     DEVELOPMENT_TEAM="$SAFARI_TEAM_ID" -allowProvisioningUpdates)
 fi
 archive="$project_root/Read Frog Safari.xcarchive"
-# An ordinary Xcode build registers its app with LaunchServices, even under
-# DerivedData. Archive for distribution without activating a second extension.
+# Xcode registers the intermediate app even for archives, then moves it into
+# the archive. Remove only that transient registration, including on failure.
+intermediate="$PWD/.safari/DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/$app_name/InstallationBuildProductsLocation/Applications/$app_name.app"
+unregister_intermediate() {
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$intermediate" >/dev/null 2>&1 || true
+}
+trap unregister_intermediate EXIT
 xcodebuild -project "$project_root/$app_name/$app_name.xcodeproj" \
   -scheme "$app_name" -configuration Release \
   -derivedDataPath "$PWD/.safari/DerivedData" \
