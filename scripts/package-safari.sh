@@ -18,7 +18,9 @@ xcrun safari-web-extension-converter "$PWD/.output/safari-mv3" \
 
 # Xcode 27's converter can rewrite the containing app ID independently of its
 # extension. Pin both generated target IDs so installation preserves extension data.
-python3 scripts/fix-safari-project.py "$project_root/$app_name" "$bundle_id"
+# Xcode unconditionally registers the intermediate macOS app, even when
+# archiving. Give that intermediate its own identity and storage namespace.
+python3 scripts/fix-safari-project.py "$project_root/$app_name" "$bundle_id.buildstage"
 
 signing=(CODE_SIGNING_ALLOWED=NO)
 if [[ -n "${SAFARI_TEAM_ID:-}" ]]; then
@@ -41,7 +43,26 @@ xcodebuild -project "$project_root/$app_name/$app_name.xcodeproj" \
   CURRENT_PROJECT_VERSION="${SAFARI_BUILD_NUMBER:-1}" \
   MACOSX_DEPLOYMENT_TARGET="${SAFARI_MACOS_TARGET:-14.0}" "${signing[@]}" archive
 app_path="$archive/Products/Applications/$app_name.app"
-resources="$app_path/Contents/PlugIns/$app_name Extension.appex/Contents/Resources"
+extension="$app_path/Contents/PlugIns/$app_name Extension.appex"
+# Only the finished archive receives the installed identities. These local
+# development builds use sandbox entitlements and no provisioning profile.
+if [[ -e "$app_path/Contents/embedded.provisionprofile" || -e "$extension/Contents/embedded.provisionprofile" ]]; then
+  echo "Cannot retarget a provisioned Safari archive" >&2
+  exit 1
+fi
+if [[ -n "${SAFARI_TEAM_ID:-}" ]]; then
+  (cd "$project_root" && codesign -d --extract-certificates "$app_path")
+  signing_identity=$(shasum -a 1 "$project_root/codesign0" | awk '{print $1}')
+fi
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bundle_id.Extension" "$extension/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bundle_id" "$app_path/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :ApplicationProperties:CFBundleIdentifier $bundle_id" "$archive/Info.plist"
+if [[ -n "${SAFARI_TEAM_ID:-}" ]]; then
+  for target in "$extension" "$app_path"; do
+    codesign --force --sign "$signing_identity" --preserve-metadata=entitlements,flags,runtime "$target"
+  done
+fi
+resources="$extension/Contents/Resources"
 # The converter registers folders separately. Verify nested runtime chunks too.
 while IFS= read -r -d '' file; do
   cmp ".output/safari-mv3/$file" "$resources/${file#./}"
