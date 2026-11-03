@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "wxt build",
-    "build:safari": "WXT_SKIP_ENV_VALIDATION=true wxt build -b safari --mv3 && node scripts/check-safari-build.mjs",
+    "build:safari": "WXT_SKIP_ENV_VALIDATION=true wxt build -b safari --mv3 && node scripts/build-safari-legacy-styles.mjs && node scripts/check-safari-build.mjs",
     "package:safari": "bash scripts/package-safari.sh",
     "build:edge": "wxt build -b edge",
     "build:firefox": "wxt build -b firefox --mv3",

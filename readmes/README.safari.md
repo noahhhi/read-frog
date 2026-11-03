@@ -20,7 +20,7 @@ SAFARI_TEAM_ID=YOUR_TEAM_ID \
 pnpm package:safari
 ```
 
-The app is `.safari/DerivedData/Build/Products/Release/Read Frog Safari.app`. Copy it into Applications, open it, and enable Read Frog in Safari's Extensions settings. Grant access to the websites you want to translate. Keep the same `SAFARI_BUNDLE_ID` across updates; the default is `app.readfrog.safari.local`. Increase `SAFARI_BUILD_NUMBER` for each installed update. Export your configuration before replacing a local development app: uninstalling or unregistering an extension can reset its local storage, including sign-in state.
+The packaging script prints the signed app path inside its Xcode archive. Copy it into Applications, open it, and enable Read Frog in Safari's Extensions settings. Grant access to the websites you want to translate. Keep the same `SAFARI_BUNDLE_ID` across updates; the default is `app.readfrog.safari.local`. Increase `SAFARI_BUILD_NUMBER` for each installed update. Export your configuration before replacing a local development app: uninstalling or unregistering an extension can reset its local storage, including sign-in state.
 
 Without `SAFARI_TEAM_ID`, the script creates an unsigned development build. Safari requires its developer setting for unsigned extensions in that case. Signed local development and App Store distribution have different requirements; this script does not publish an App Store release.
 

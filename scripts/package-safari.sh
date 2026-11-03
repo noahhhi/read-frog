@@ -25,13 +25,17 @@ if [[ -n "${SAFARI_TEAM_ID:-}" ]]; then
   signing=(CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development"
     DEVELOPMENT_TEAM="$SAFARI_TEAM_ID" -allowProvisioningUpdates)
 fi
+archive="$project_root/Read Frog Safari.xcarchive"
+# An ordinary Xcode build registers its app with LaunchServices, even under
+# DerivedData. Archive for distribution without activating a second extension.
 xcodebuild -project "$project_root/$app_name/$app_name.xcodeproj" \
   -scheme "$app_name" -configuration Release \
   -derivedDataPath "$PWD/.safari/DerivedData" \
+  -archivePath "$archive" \
   -destination "generic/platform=macOS" \
   CURRENT_PROJECT_VERSION="${SAFARI_BUILD_NUMBER:-1}" \
-  MACOSX_DEPLOYMENT_TARGET="${SAFARI_MACOS_TARGET:-14.0}" "${signing[@]}" build
-app_path="$PWD/.safari/DerivedData/Build/Products/Release/$app_name.app"
+  MACOSX_DEPLOYMENT_TARGET="${SAFARI_MACOS_TARGET:-14.0}" "${signing[@]}" archive
+app_path="$archive/Products/Applications/$app_name.app"
 resources="$app_path/Contents/PlugIns/$app_name Extension.appex/Contents/Resources"
 # The converter registers folders separately. Verify nested runtime chunks too.
 while IFS= read -r -d '' file; do

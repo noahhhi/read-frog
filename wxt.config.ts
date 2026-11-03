@@ -70,7 +70,14 @@ export default defineConfig({
     // moz-extension:// URLs on regular pages. Firefox enforces this more strictly.
     web_accessible_resources: [
       {
-        resources: ["assets/*.png", "assets/*.svg", "assets/*.webp"],
+        resources: [
+          "assets/*.png",
+          "assets/*.svg",
+          "assets/*.webp",
+          ...(browser === "safari"
+            ? ["content-scripts/side.css", "content-scripts/selection.css"]
+            : []),
+        ],
         matches: ["*://*/*", "file:///*"],
       },
       // The shared content runtime the loader content script imports. Pages
